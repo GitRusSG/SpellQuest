@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#6C63FF">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SpellQuest">
+    <title>SpellQuest</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Tesseract.js for OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Screens are rendered here by the router -->
+    </div>
+
+    <!-- Core modules -->
+    <script src="js/storage/store.js"></script>
+    <script src="js/game/progression.js"></script>
+    <script src="js/game/heroes.js"></script>
+    <script src="js/speech/voice.js"></script>
+    <script src="js/spelling/checker.js"></script>
+    <script src="js/camera/ocr.js"></script>
+    <script src="js/camera/handwriting.js"></script>
+
+    <!-- UI modules -->
+    <script src="js/ui/keyboard.js"></script>
+    <script src="js/ui/screens.js"></script>
+    <script src="js/ui/animations.js"></script>
+
+    <!-- App entry -->
+    <script src="js/app.js"></script>
+</body>
+</html>
