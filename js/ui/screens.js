@@ -435,7 +435,7 @@ const Screens = (() => {
                 <div class="capture-icon">📸</div>
                 <h2>Photo your spelling sheet</h2>
                 <p>Works with multiple lists on one page</p>
-                <button class="btn btn-primary capture-btn"
+                <button class="btn btn-primary capture-btn camera-only-btn"
                     onclick="Screens.captureAndProcess('camera')">
                     📷 Take Photo
                 </button>
@@ -936,7 +936,7 @@ const Screens = (() => {
                 <h2>Take a photo of your answers</h2>
                 <p>Make sure all ${total} answers are visible
                     ${testState.sentences.length > 0 ? '(words and sentences)' : ''}</p>
-                <button class="btn btn-primary capture-btn"
+                <button class="btn btn-primary capture-btn camera-only-btn"
                     onclick="Screens.submitPaperPhoto('camera')">
                     📷 Take Photo
                 </button>
