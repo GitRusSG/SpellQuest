@@ -5,6 +5,12 @@
 
     const app = document.getElementById('app');
 
+    // Check profanity lockout before anything else
+    if (ProfanityGuard.isLockedOut()) {
+        ProfanityGuard.showLockoutScreen();
+        return;
+    }
+
     // Show a loading splash while we check auth
     app.innerHTML = `
         <div class="screen" style="justify-content:center;align-items:center;">
