@@ -1255,3 +1255,27 @@ input[type="date"].form-input { height: 52px; }
     color: var(--success);
     font-weight: 600;
 }
+
+/* ── Sentence badge ── */
+.sentence-badge {
+    text-align: center;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary);
+    background: rgba(108,99,255,0.08);
+}
+
+.paper-review-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.paper-review-type {
+    font-size: 11px;
+    color: var(--text-light);
+    font-style: italic;
+}
