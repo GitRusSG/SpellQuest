@@ -275,12 +275,45 @@ const Screens = (() => {
                         </div>
                     </div>
                 ` : ''}
+                <div class="card">
+                    <h3 style="margin-bottom:4px;">⚙️ Settings</h3>
+                    <p style="font-size:12px;color:var(--text-light);margin-bottom:12px;">
+                        Gemini API key improves photo word list accuracy
+                    </p>
+                    <div class="flex-row" style="gap:8px;align-items:center;">
+                        <input id="gemini-key-input" type="password" class="form-input" style="flex:1;"
+                            placeholder="Paste Gemini API key…"
+                            value="${OCR.hasApiKey() ? '••••••••••••••••' : ''}"
+                            autocomplete="off">
+                        <button class="btn btn-secondary btn-small" onclick="Screens.saveGeminiKey()">
+                            💾 Save
+                        </button>
+                        ${OCR.hasApiKey() ? `<button class="btn btn-small btn-danger" onclick="Screens.clearGeminiKey()">✕</button>` : ''}
+                    </div>
+                    <div id="gemini-key-msg" class="form-success hidden" style="margin-top:6px;"></div>
+                    ${OCR.hasApiKey() ? '<p style="font-size:12px;color:var(--success);margin-top:6px;">✓ Gemini OCR active</p>' : '<p style="font-size:12px;color:var(--text-light);margin-top:6px;">No key set — using Tesseract fallback</p>'}
+                </div>
                 <div class="flex-row mt-12">
                     <button class="btn btn-secondary" onclick="Screens.showHome()">🏠 Home</button>
                     <button class="btn btn-danger" onclick="Screens.confirmSignOut()">Sign Out</button>
                 </div>
             </div>
         `;
+    }
+
+    function saveGeminiKey() {
+        const input = document.getElementById('gemini-key-input');
+        const msgEl = document.getElementById('gemini-key-msg');
+        const val   = input?.value.trim();
+        if (!val || val.startsWith('•')) return;
+        OCR.setApiKey(val);
+        if (msgEl) { msgEl.textContent = '✓ Key saved!'; msgEl.classList.remove('hidden'); }
+        setTimeout(() => showProfile(), 1000);
+    }
+
+    function clearGeminiKey() {
+        OCR.setApiKey('');
+        showProfile();
     }
 
     async function confirmSignOut() {
@@ -1100,6 +1133,8 @@ const Screens = (() => {
         showForgotPassword,
         submitForgotPassword,
         showProfile,
+        saveGeminiKey,
+        clearGeminiKey,
         confirmSignOut,
         showManualInput,
         processManualInput,
