@@ -516,11 +516,26 @@ const Screens = (() => {
         const lists = window._ocrLists || [];
         if (lists.length === 0) { showHome('manage'); return; }
 
-        // Show saving state
         const btn = document.querySelector('.btn-primary');
         if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
-        await DB.saveAllLists(lists);
+        // Check for duplicates by name
+        const existing = await DB.getLists({ status: 'all' });
+        const existingNames = new Set(existing.map(l => l.name.toLowerCase()));
+
+        const newLists   = lists.filter(l => !existingNames.has(l.name.toLowerCase()));
+        const skipped    = lists.length - newLists.length;
+
+        if (newLists.length > 0) {
+            await DB.saveAllLists(newLists);
+        }
+
+        if (skipped > 0 && newLists.length > 0) {
+            alert(`Saved ${newLists.length} new list${newLists.length>1?'s':''}. ${skipped} already existed and ${skipped>1?'were':'was'} skipped.`);
+        } else if (skipped > 0 && newLists.length === 0) {
+            alert(`All ${skipped} list${skipped>1?'s':''} already exist. Nothing new to save.`);
+        }
+
         showHome('practice');
     }
 
@@ -628,12 +643,60 @@ const Screens = (() => {
         window._reviewWords = words;
 
         if (Auth.isSignedIn()) {
+            // Check for duplicate name (skip check if we're editing an existing list)
+            if (!_activeListId) {
+                const existing = await DB.getLists({ status: 'all' });
+                const dup = existing.find(l => l.name.toLowerCase() === name.toLowerCase());
+                if (dup) {
+                    const action = await _showDuplicateModal(name);
+                    if (action === 'update') {
+                        _activeListId = dup.id;
+                    } else if (action === 'skip') {
+                        // Use existing list for practice without saving
+                        _activeListId   = dup.id;
+                        _activeListName = dup.name;
+                        showStartScreen(words);
+                        return;
+                    } else {
+                        return; // cancelled
+                    }
+                }
+            }
+
             const result = await DB.saveList(name, words, _activeListId||null, { testDate });
             if (result.success && !_activeListId) {
                 _activeListId = result.id;
             }
         }
         showStartScreen(words);
+    }
+
+    // Shows a modal asking what to do with a duplicate list name.
+    // Returns a promise that resolves to 'update', 'skip', or 'cancel'.
+    function _showDuplicateModal(name) {
+        return new Promise(resolve => {
+            const m = document.createElement('div');
+            m.className = 'modal-overlay';
+            m.innerHTML = `
+                <div class="modal exit-modal">
+                    <div class="exit-modal-title">List already exists</div>
+                    <div class="exit-modal-sub">
+                        You already have a list called<br>
+                        <strong>"${_esc(name)}"</strong>
+                    </div>
+                    <button class="btn btn-primary mt-16" id="dup-update">
+                        ✓ Update existing list
+                    </button>
+                    <button class="btn btn-secondary mt-8" id="dup-skip">
+                        ▶ Just practice (don't save)
+                    </button>
+                    <button class="btn-text mt-12" id="dup-cancel">Cancel</button>
+                </div>`;
+            document.body.appendChild(m);
+            document.getElementById('dup-update').onclick = () => { m.remove(); resolve('update'); };
+            document.getElementById('dup-skip').onclick   = () => { m.remove(); resolve('skip'); };
+            document.getElementById('dup-cancel').onclick = () => { m.remove(); resolve('cancel'); };
+        });
     }
 
     // ── Start screen ──────────────────────────────────────────────────────────
