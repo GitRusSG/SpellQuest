@@ -676,7 +676,7 @@ const Screens = (() => {
             <button class="btn btn-primary btn-full mt-12"
                 onclick="Screens.confirmAndSave()">
                 ${isOcrEdit
-                    ? '✓ Save &amp; Back to List'
+                    ? '✓ Done'
                     : isNew
                         ? '💾 Save &amp; Start Spelling'
                         : '✓ Save Changes &amp; Start Spelling'}
@@ -726,6 +726,12 @@ const Screens = (() => {
         _activeListName = name;
         window._reviewWords = words;
 
+        // In ocr-edit mode: only save to memory, DB write happens in "Save All & Done"
+        if (window._reviewMode === 'ocr-edit') {
+            _saveOcrEditAndReturn();
+            return;
+        }
+
         if (Auth.isSignedIn()) {
             // Check for duplicate name (skip check if we're editing an existing list)
             if (!_activeListId) {
@@ -738,11 +744,7 @@ const Screens = (() => {
                     } else if (action === 'skip') {
                         _activeListId   = dup.id;
                         _activeListName = dup.name;
-                        if (window._reviewMode === 'ocr-edit') {
-                            _saveOcrEditAndReturn();
-                        } else {
-                            showStartScreen(words, window._reviewSentences || []);
-                        }
+                        showStartScreen(words, window._reviewSentences || []);
                         return;
                     } else {
                         return; // cancelled
@@ -757,12 +759,7 @@ const Screens = (() => {
             }
         }
 
-        // Route based on mode
-        if (window._reviewMode === 'ocr-edit') {
-            _saveOcrEditAndReturn();
-        } else {
-            showStartScreen(words, window._reviewSentences || []);
-        }
+        showStartScreen(words, window._reviewSentences || []);
     }
 
     // Shows a modal asking what to do with a duplicate list name.
