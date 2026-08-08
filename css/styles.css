@@ -39,7 +39,7 @@ body {
 }
 
 #app {
-    max-width: 480px;
+    width: 100%;
     margin: 0 auto;
     min-height: 100dvh;
     position: relative;
@@ -897,7 +897,7 @@ input[type="date"].form-input { height: 52px; }
     border-radius: var(--radius) var(--radius) 0 0;
     padding: 24px 20px 32px;
     width: 100%;
-    max-width: 480px;
+    max-width: 600px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -1112,6 +1112,57 @@ input[type="date"].form-input { height: 52px; }
     .home-hero  { font-size: 40px; }
     .key        { height: 40px; font-size: 14px; }
     .hero-grid  { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+}
+
+/* ── Desktop / tablet enhancements ── */
+@media (min-width: 768px) {
+    .tab-content { padding: 24px 32px 100px; }
+    .screen-content { padding: 24px 32px; }
+
+    .add-options {
+        grid-template-columns: 1fr 1fr 1fr;
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 24px 32px;
+    }
+
+    .hero-grid {
+        grid-template-columns: repeat(4, 1fr);
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 24px 32px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .capture-body, .paper-capture-body, .start-body, .feedback-body {
+        padding: 60px 48px;
+    }
+
+    .listen-area { padding: 28px 32px 16px; }
+    .answer-display { margin: 12px 32px; }
+
+    .keyboard { padding: 12px 24px 16px; }
+    .key { height: 52px; max-width: 48px; font-size: 18px; }
+    .key-space { max-width: 280px; }
+    .key-check { max-width: 100px; }
+
+    .results-actions { padding: 24px 32px; }
+
+    .practice-card-top { padding: 20px 24px; }
+
+    .home-header { padding: 24px 32px 18px; }
+    .home-hero-row { gap: 16px; }
+
+    .modal {
+        border-radius: var(--radius);
+        max-width: 480px;
+    }
+    .modal-overlay {
+        align-items: center;
+    }
 }
 
 /* ── Level-up content ── */
