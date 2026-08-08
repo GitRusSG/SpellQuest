@@ -737,7 +737,188 @@ const Screens = (() => {
 
     function startTest(words) {
         testState = { words, currentIndex:0, results:[], mistakes:[] };
-        _showTestWord();
+        if (window._testMode === 'paper') {
+            _showPaperDictation();
+        } else {
+            _showTestWord();
+        }
+    }
+
+    // ── Paper mode: dictation then single photo ───────────────────────────────
+
+    function _showPaperDictation() {
+        const { words, currentIndex } = testState;
+        const word  = words[currentIndex];
+        const total = words.length;
+
+        app.innerHTML = `
+        <div class="screen test-screen">
+            <div class="test-topbar">
+                <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
+                <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
+                <div class="test-counter">${currentIndex+1}/${total}</div>
+            </div>
+            <div class="test-prog-bar">
+                <div class="test-prog-fill"
+                    style="width:${Math.round((currentIndex/total)*100)}%"></div>
+            </div>
+            <div class="paper-dictation">
+                <div class="paper-icon">✍️</div>
+                <div class="paper-instruction">Write word ${currentIndex+1} on your paper</div>
+                <div class="paper-word-num">#${currentIndex+1}</div>
+                <div class="listen-area">
+                    <button class="listen-btn" onclick="Screens.listenWord()">🔊 Listen</button>
+                    <button class="listen-btn listen-sm" onclick="Screens.replayWord()">🔊 Again</button>
+                </div>
+                <button class="btn btn-primary paper-next-btn"
+                    onclick="Screens.paperNextWord()">
+                    ${currentIndex < total - 1 ? 'Next Word →' : '📸 Done — Take Photo'}
+                </button>
+            </div>
+        </div>`;
+
+        setTimeout(() => Voice.pronounceWord(word), 400);
+    }
+
+    function paperNextWord() {
+        testState.currentIndex++;
+        if (testState.currentIndex >= testState.words.length) {
+            _showPaperCapture();
+        } else {
+            _showPaperDictation();
+        }
+    }
+
+    function _showPaperCapture() {
+        const total = testState.words.length;
+        app.innerHTML = `
+        <div class="screen test-screen">
+            <div class="test-topbar">
+                <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
+                <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
+                <div class="test-counter">${total} words</div>
+            </div>
+            <div class="paper-capture-body">
+                <div class="paper-capture-icon">📸</div>
+                <h2>Take a photo of your answers</h2>
+                <p>Make sure all ${total} words are visible</p>
+                <button class="btn btn-primary capture-btn"
+                    onclick="Screens.submitPaperPhoto()">
+                    📷 Take Photo / Choose Image
+                </button>
+                <div id="paper-check-status" style="display:none;">
+                    <p class="ocr-reading-text">Reading your handwriting…</p>
+                    <div class="xp-bar">
+                        <div class="xp-bar-fill" id="paper-progress" style="width:0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    async function submitPaperPhoto() {
+        try {
+            const imageData = await OCR.captureImage();
+            document.getElementById('paper-check-status').style.display = 'block';
+
+            const el = document.getElementById('paper-progress');
+            if (el) el.style.width = '30%';
+
+            // Call the handwriting check Edge Function
+            const { data: { session } } = await SupabaseClient.get().auth.getSession();
+            const [meta, base64] = imageData.split(',');
+            const mimeType = meta.match(/:(.*?);/)[1];
+
+            if (el) el.style.width = '50%';
+
+            const response = await fetch(
+                SupabaseClient.get().supabaseUrl + '/functions/v1/check-handwriting',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SupabaseClient.get().supabaseKey,
+                        'Authorization': `Bearer ${session?.access_token || ''}`
+                    },
+                    body: JSON.stringify({
+                        imageBase64: base64,
+                        mimeType,
+                        wordCount: testState.words.length
+                    })
+                }
+            );
+
+            if (el) el.style.width = '85%';
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err?.error || 'Failed to read handwriting');
+            }
+
+            const result = await response.json();
+            const userAnswers = result.words || [];
+
+            if (el) el.style.width = '100%';
+
+            // Compare each answer to the expected word
+            testState.currentIndex = 0;
+            testState.results = [];
+            testState.mistakes = [];
+
+            for (let i = 0; i < testState.words.length; i++) {
+                const expected = testState.words[i];
+                const answer   = userAnswers[i] || '';
+                const correct  = Checker.check(answer, expected);
+                testState.results.push({ word: expected, userAnswer: answer, correct });
+                if (!correct) testState.mistakes.push(expected);
+                if (correct) {
+                    Progression.addXP(10);
+                    Progression.addCoins(1);
+                }
+            }
+
+            // Show paper results review before final results
+            _showPaperReview(imageData, userAnswers);
+
+        } catch (err) {
+            console.error('Paper check error:', err);
+            alert('Could not read your handwriting. Please try again with a clearer photo.');
+            _showPaperCapture();
+        }
+    }
+
+    function _showPaperReview(imageData, userAnswers) {
+        const rows = testState.words.map((word, i) => {
+            const answer  = userAnswers[i] || '';
+            const correct = Checker.check(answer, word);
+            return `
+            <div class="paper-review-row ${correct ? 'paper-correct' : 'paper-wrong'}">
+                <span class="paper-review-num">${i+1}.</span>
+                <span class="paper-review-icon">${correct ? '✓' : '✕'}</span>
+                <span class="paper-review-answer">${_esc(answer || '—')}</span>
+                ${!correct ? `<span class="paper-review-expected">→ ${_esc(word)}</span>` : ''}
+            </div>`;
+        }).join('');
+
+        const correct = testState.results.filter(r => r.correct).length;
+        const total   = testState.words.length;
+
+        app.innerHTML = `
+        <div class="screen">
+            <div class="test-topbar">
+                <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
+                <div class="test-counter">${correct}/${total} correct</div>
+            </div>
+            <div class="paper-review-body">
+                <img src="${imageData}" class="camera-preview" alt="Your answers">
+                <div class="card">
+                    <h3 class="card-title">Results</h3>
+                    <div class="paper-review-list">${rows}</div>
+                </div>
+                <button class="btn btn-primary"
+                    onclick="Screens.showResults()">See Full Results 🏆</button>
+            </div>
+        </div>`;
     }
 
     function resumeTest() {
@@ -758,7 +939,6 @@ const Screens = (() => {
     function _showTestWord() {
         const { words, currentIndex } = testState;
         const word    = words[currentIndex];
-        const isPaper = window._testMode === 'paper';
         Keyboard.reset();
 
         app.innerHTML = `
@@ -778,32 +958,24 @@ const Screens = (() => {
                 <button class="listen-btn listen-sm" onclick="Screens.replayWord()">🔊 Again</button>
             </div>
             <div class="answer-display" id="answer-display">
-                ${isPaper ? 'Write on paper, then take a photo' : 'Type your answer below'}
+                Type your answer below
             </div>
-            ${isPaper ? `
-            <div class="text-center mt-16">
-                <button class="btn btn-primary"
-                    onclick="Screens.paperCapture()">
-                    📸 Take Photo of Answer
-                </button>
-            </div>` : ''}
             <div id="keyboard-container"></div>
         </div>`;
 
-        if (!isPaper) {
-            Keyboard.setCallbacks(
-                val => {
-                    const d = document.getElementById('answer-display');
-                    if (d) {
-                        d.textContent = val || 'Type your answer below';
-                        d.className = val ? 'answer-display answer-filled' : 'answer-display';
-                    }
-                },
-                val => _checkAnswer(val)
-            );
-            document.getElementById('keyboard-container')
-                .appendChild(Keyboard.render());
-        }
+        Keyboard.setCallbacks(
+            val => {
+                const d = document.getElementById('answer-display');
+                if (d) {
+                    d.textContent = val || 'Type your answer below';
+                    d.className = val ? 'answer-display answer-filled' : 'answer-display';
+                }
+            },
+            val => _checkAnswer(val)
+        );
+        document.getElementById('keyboard-container')
+            .appendChild(Keyboard.render());
+
         setTimeout(() => Voice.pronounceWord(word), 400);
     }
 
@@ -1253,6 +1425,7 @@ const Screens = (() => {
         showStartScreen, startTest,
         exitTest, pauseTest, abandonTest,
         listenWord, replayWord,
+        paperNextWord, submitPaperPhoto,
         paperCapture, confirmPaper, editPaper, submitPaperEdit,
         nextWord,
         showResults, practiceMistakes, practiceAgain,
