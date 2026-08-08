@@ -436,8 +436,13 @@ const Screens = (() => {
                 <h2>Photo your spelling sheet</h2>
                 <p>Works with multiple lists on one page</p>
                 <button class="btn btn-primary capture-btn"
-                    onclick="Screens.captureAndProcess()">
-                    📷 Take Photo / Choose Image
+                    onclick="Screens.captureAndProcess('camera')">
+                    📷 Take Photo
+                </button>
+                <button class="btn btn-primary capture-btn"
+                    onclick="Screens.captureAndProcess('gallery')"
+                    style="margin-top:10px;">
+                    🖼️ Choose Picture
                 </button>
                 <div id="ocr-status" style="display:none;width:100%;margin-top:20px;">
                     <p class="ocr-reading-text">Reading your spelling list…</p>
@@ -449,9 +454,9 @@ const Screens = (() => {
         </div>`;
     }
 
-    async function captureAndProcess() {
+    async function captureAndProcess(source) {
         try {
-            const imageData = await OCR.captureImage();
+            const imageData = await OCR.captureImage(source);
             document.getElementById('ocr-status').style.display = 'block';
             const lists = await OCR.recognizeMultipleLists(imageData, pct => {
                 const el = document.getElementById('ocr-progress');
@@ -932,8 +937,13 @@ const Screens = (() => {
                 <p>Make sure all ${total} answers are visible
                     ${testState.sentences.length > 0 ? '(words and sentences)' : ''}</p>
                 <button class="btn btn-primary capture-btn"
-                    onclick="Screens.submitPaperPhoto()">
-                    📷 Take Photo / Choose Image
+                    onclick="Screens.submitPaperPhoto('camera')">
+                    📷 Take Photo
+                </button>
+                <button class="btn btn-primary capture-btn"
+                    onclick="Screens.submitPaperPhoto('gallery')"
+                    style="margin-top:10px;">
+                    🖼️ Choose Picture
                 </button>
                 <div id="paper-check-status" style="display:none;">
                     <p class="ocr-reading-text">Reading your handwriting…</p>
@@ -945,9 +955,9 @@ const Screens = (() => {
         </div>`;
     }
 
-    async function submitPaperPhoto() {
+    async function submitPaperPhoto(source) {
         try {
-            const imageData = await OCR.captureImage();
+            const imageData = await OCR.captureImage(source);
             document.getElementById('paper-check-status').style.display = 'block';
 
             const el = document.getElementById('paper-progress');
@@ -1175,10 +1185,10 @@ const Screens = (() => {
     function listenWord() { Voice.pronounceWord(_getCurrentItem()); }
     function stopSpeech() { window.speechSynthesis.cancel(); }
 
-    async function paperCapture() {
+    async function paperCapture(source) {
         const word = testState.words[testState.currentIndex];
         try {
-            const img  = await Handwriting.captureAnswer();
+            const img  = await Handwriting.captureAnswer(source);
             const text = await Handwriting.recognizeHandwriting(img, word);
             _showPaperConfirm(text, img);
         } catch (err) {
