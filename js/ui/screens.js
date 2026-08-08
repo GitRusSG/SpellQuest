@@ -1161,29 +1161,6 @@ const Screens = (() => {
                 </div>
             </div>`:''}
             <div class="card">
-                <h3 class="card-title">⚙️ Settings</h3>
-                <label class="form-label mt-8">
-                    Gemini API key
-                    <span class="form-hint">Improves photo list accuracy</span>
-                </label>
-                <input id="gemini-key" type="password" class="form-input mt-8"
-                    placeholder="Paste Gemini API key here…"
-                    value="${OCR.hasApiKey()?'••••••••••••••••':''}"
-                    autocomplete="off">
-                <div class="settings-key-status mt-8">
-                    ${OCR.hasApiKey()
-                        ? '<span style="color:var(--success)">✓ Gemini OCR active</span>'
-                        : '<span style="color:var(--text-light)">No key — using Tesseract fallback</span>'}
-                </div>
-                <div class="flex-row mt-12" style="gap:8px;">
-                    <button class="btn btn-secondary" style="flex:1;width:auto;"
-                        onclick="Screens.saveGeminiKey()">💾 Save Key</button>
-                    ${OCR.hasApiKey()
-                        ?`<button class="btn btn-danger" style="flex:0 0 52px;width:52px;"
-                            onclick="Screens.clearGeminiKey()">✕</button>`:''}
-                </div>
-            </div>
-            <div class="card">
                 <button class="btn btn-secondary btn-full"
                     onclick="Screens.showHeroShop()">🏪 Hero Shop</button>
                 <button class="btn btn-secondary btn-full mt-8"
@@ -1195,15 +1172,6 @@ const Screens = (() => {
             </div>
         </div>`;
     }
-
-    function saveGeminiKey() {
-        const val = document.getElementById('gemini-key')?.value.trim();
-        if (!val||val.startsWith('•')) return;
-        OCR.setApiKey(val);
-        setTimeout(()=>showProfile(), 300);
-    }
-
-    function clearGeminiKey() { OCR.setApiKey(''); showProfile(); }
 
     async function confirmSignOut() {
         if (!confirm('Sign out of SpellQuest?')) return;
@@ -1281,7 +1249,7 @@ const Screens = (() => {
         nextWord,
         showResults, practiceMistakes, practiceAgain,
         showResultsHistory,
-        showProfile, saveGeminiKey, clearGeminiKey, confirmSignOut,
+        showProfile, confirmSignOut,
         showHeroShop, buyHero, equipHero
     };
 })();
