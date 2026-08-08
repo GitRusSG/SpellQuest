@@ -52,9 +52,13 @@ create table if not exists public.word_lists (
     user_id    uuid not null references public.profiles(id) on delete cascade,
     name       text not null default 'My Word List',
     words      text[] not null default array[]::text[],
+    status     text not null default 'active' check (status in ('active', 'archived')),
+    test_date  date,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
+
+create index if not exists word_lists_status_idx on public.word_lists(user_id, status);
 
 create index if not exists word_lists_user_id_idx on public.word_lists(user_id);
 

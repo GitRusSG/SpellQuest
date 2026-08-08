@@ -1,320 +1,1146 @@
-/* ===== SpellQuest Screens Module ===== */
-/* Renders all screens and handles navigation */
+/* ===== SpellQuest Screens ===== */
 
 const Screens = (() => {
     let app = null;
-    let currentScreen = 'home';
     let testState = null;
-    // tracks which saved list (if any) the current test came from
-    let _activeListId = null;
+    let _activeListId   = null;
     let _activeListName = null;
+    let _homeTab        = 'practice'; // 'practice' | 'manage'
 
-    function init(appEl) {
-        app = appEl;
-        showHome();
+    function init(appEl) { app = appEl; showHome(); }
+
+    // ── Utilities ─────────────────────────────────────────────────────────────
+    function _esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function _formatDate(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleDateString(undefined,
+            { day:'numeric', month:'short', year:'numeric' });
+    }
+    function _formatShortDate(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleDateString(undefined,
+            { day:'numeric', month:'short' });
+    }
+    function _pct(c, a) { return a > 0 ? Math.round((c/a)*100) : 0; }
+    function _scoreColor(p) {
+        return p===100 ? 'var(--success)' : p>=70 ? 'var(--warning)' : 'var(--error)';
+    }
+    function _showErr(el, msg) {
+        if (!el) return;
+        el.textContent = msg;
+        el.classList.remove('hidden');
+    }
+    function _daysUntil(dateStr) {
+        if (!dateStr) return null;
+        const diff = new Date(dateStr) - new Date();
+        return Math.ceil(diff / 86400000);
     }
 
-    function navigate(screen) {
-        currentScreen = screen;
-    }
-
-    // ===== HEADER =====
-    function renderHeader() {
-        const hero = Heroes.getSelected();
-        const progress = Progression.getProgress();
+    // ── Header (compact, used inside non-home screens) ────────────────────────
+    function _header(backFn) {
         const user = Auth.getUser();
         return `
-            <div class="header">
-                <div class="header-left">
-                    <span class="header-hero">${hero.emoji}</span>
-                    <span class="header-title">SpellQuest</span>
-                </div>
-                <div class="header-stats">
-                    <span>⭐ ${progress.xp}/${progress.xpRequired} XP</span>
-                    <span class="coins">🪙 ${progress.coins}</span>
-                    <span class="level-badge">🆙 Level ${progress.level}</span>
-                    ${user ? `<button class="btn-icon" onclick="Screens.showProfile()" title="Profile">👤</button>` : ''}
-                </div>
+        <div class="header">
+            <div class="header-left">
+                ${backFn
+                    ? `<button class="btn-back" onclick="${backFn}">‹</button>`
+                    : `<span class="header-hero">${Heroes.getSelected().emoji}</span>`}
+                <span class="header-title">SpellQuest</span>
             </div>
-        `;
+            <div class="header-right">
+                <span class="header-coins">🪙 ${Progression.getProgress().coins}</span>
+                ${user ? `<button class="btn-icon" onclick="Screens.showProfile()">👤</button>` : ''}
+            </div>
+        </div>`;
     }
 
-    // ===== AUTH SCREENS =====
-
-    function showSignIn(message = '') {
-        navigate('sign-in');
+    // ── Auth screens ──────────────────────────────────────────────────────────
+    function showSignIn(msg='') {
         app.innerHTML = `
-            <div class="screen auth-screen">
-                <div class="auth-logo">
-                    <div style="font-size:56px;">🤖</div>
-                    <h1 class="auth-title">SpellQuest</h1>
-                    <p class="auth-subtitle">Spelling practice that's actually fun</p>
-                </div>
-                ${message ? `<div class="auth-message">${message}</div>` : ''}
-                <div class="card">
-                    <h2 style="margin-bottom:16px;">Sign In</h2>
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input id="si-email" type="email" class="form-input"
-                            placeholder="parent@example.com"
-                            autocomplete="email" autocapitalize="off">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Password</label>
-                        <input id="si-password" type="password" class="form-input"
-                            placeholder="••••••••" autocomplete="current-password">
-                    </div>
-                    <div id="si-error" class="form-error hidden"></div>
-                    <button id="si-btn" class="btn btn-primary btn-full mt-12"
-                        onclick="Screens.submitSignIn()">Sign In</button>
-                    <button class="btn btn-ghost btn-small mt-8 btn-full"
-                        onclick="Screens.showForgotPassword()">Forgot password?</button>
-                </div>
-                <div class="auth-switch">
-                    <span>No account yet?</span>
-                    <button class="btn btn-secondary" onclick="Screens.showSignUp()">Create Account</button>
-                </div>
+        <div class="screen auth-screen">
+            <div class="auth-logo">
+                <div class="auth-logo-emoji">🤖</div>
+                <h1 class="auth-title">SpellQuest</h1>
+                <p class="auth-subtitle">Spelling practice that's actually fun</p>
             </div>
-        `;
+            ${msg ? `<div class="auth-message">${_esc(msg)}</div>` : ''}
+            <div class="card">
+                <h2 class="card-title">Sign In</h2>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input id="si-email" type="email" class="form-input"
+                        placeholder="parent@example.com"
+                        autocomplete="email" autocapitalize="off">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input id="si-password" type="password" class="form-input"
+                        placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <div id="si-error" class="form-error hidden"></div>
+                <button id="si-btn" class="btn btn-primary btn-full mt-16"
+                    onclick="Screens.submitSignIn()">Sign In</button>
+                <button class="btn-text mt-12"
+                    onclick="Screens.showForgotPassword()">Forgot password?</button>
+            </div>
+            <div class="auth-switch">
+                <span>No account yet?</span>
+                <button class="btn btn-secondary" onclick="Screens.showSignUp()">Create Account</button>
+            </div>
+        </div>`;
         document.getElementById('si-email')?.addEventListener('keydown', e => {
-            if (e.key === 'Enter') document.getElementById('si-password')?.focus();
+            if (e.key==='Enter') document.getElementById('si-password')?.focus();
         });
         document.getElementById('si-password')?.addEventListener('keydown', e => {
-            if (e.key === 'Enter') submitSignIn();
+            if (e.key==='Enter') Screens.submitSignIn();
         });
     }
 
     async function submitSignIn() {
-        const email    = document.getElementById('si-email')?.value.trim();
-        const password = document.getElementById('si-password')?.value;
-        const errEl    = document.getElementById('si-error');
-        const btn      = document.getElementById('si-btn');
-        if (!email || !password) {
-            _showFormError(errEl, 'Please enter your email and password.');
-            return;
-        }
-        btn.disabled = true;
-        btn.textContent = 'Signing in…';
-        const result = await Auth.signIn(email, password);
-        if (!result.success) {
-            btn.disabled = false;
-            btn.textContent = 'Sign In';
-            _showFormError(errEl, result.message);
-            return;
-        }
-        // onAuthStateChange in app.js handles the redirect
+        const email = document.getElementById('si-email')?.value.trim();
+        const pass  = document.getElementById('si-password')?.value;
+        const errEl = document.getElementById('si-error');
+        const btn   = document.getElementById('si-btn');
+        if (!email||!pass) { _showErr(errEl,'Please enter your email and password.'); return; }
+        btn.disabled=true; btn.textContent='Signing in…';
+        const r = await Auth.signIn(email, pass);
+        if (!r.success) { btn.disabled=false; btn.textContent='Sign In'; _showErr(errEl,r.message); }
     }
 
     function showSignUp() {
-        navigate('sign-up');
         app.innerHTML = `
-            <div class="screen auth-screen">
-                <div class="auth-logo">
-                    <div style="font-size:56px;">🤖</div>
-                    <h1 class="auth-title">SpellQuest</h1>
-                </div>
-                <div class="card">
-                    <h2 style="margin-bottom:16px;">Create Account</h2>
-                    <div class="form-group">
-                        <label class="form-label">Child's name (display name)</label>
-                        <input id="su-username" type="text" class="form-input"
-                            placeholder="e.g. Emma"
-                            autocomplete="off" autocapitalize="words">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email (parent's email)</label>
-                        <input id="su-email" type="email" class="form-input"
-                            placeholder="parent@example.com"
-                            autocomplete="email" autocapitalize="off">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Password (min 6 characters)</label>
-                        <input id="su-password" type="password" class="form-input"
-                            placeholder="••••••••" autocomplete="new-password">
-                    </div>
-                    <div id="su-error" class="form-error hidden"></div>
-                    <button id="su-btn" class="btn btn-primary btn-full mt-12"
-                        onclick="Screens.submitSignUp()">Create Account</button>
-                </div>
-                <div class="auth-switch">
-                    <span>Already have an account?</span>
-                    <button class="btn btn-secondary" onclick="Screens.showSignIn()">Sign In</button>
-                </div>
+        <div class="screen auth-screen">
+            <div class="auth-logo">
+                <div class="auth-logo-emoji">🤖</div>
+                <h1 class="auth-title">SpellQuest</h1>
             </div>
-        `;
+            <div class="card">
+                <h2 class="card-title">Create Account</h2>
+                <div class="form-group">
+                    <label class="form-label">Child's name</label>
+                    <input id="su-name" type="text" class="form-input"
+                        placeholder="e.g. Emma" autocomplete="off" autocapitalize="words">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Parent's email</label>
+                    <input id="su-email" type="email" class="form-input"
+                        placeholder="parent@example.com"
+                        autocomplete="email" autocapitalize="off">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password (min 6 characters)</label>
+                    <input id="su-pass" type="password" class="form-input"
+                        placeholder="••••••••" autocomplete="new-password">
+                </div>
+                <div id="su-error" class="form-error hidden"></div>
+                <button id="su-btn" class="btn btn-primary btn-full mt-16"
+                    onclick="Screens.submitSignUp()">Create Account</button>
+            </div>
+            <div class="auth-switch">
+                <span>Already have an account?</span>
+                <button class="btn btn-secondary" onclick="Screens.showSignIn()">Sign In</button>
+            </div>
+        </div>`;
     }
 
     async function submitSignUp() {
-        const username = document.getElementById('su-username')?.value.trim();
-        const email    = document.getElementById('su-email')?.value.trim();
-        const password = document.getElementById('su-password')?.value;
-        const errEl    = document.getElementById('su-error');
-        const btn      = document.getElementById('su-btn');
-
-        if (!username) { _showFormError(errEl, 'Please enter a display name.'); return; }
-        if (!email)    { _showFormError(errEl, 'Please enter an email address.'); return; }
-        if (!password || password.length < 6) {
-            _showFormError(errEl, 'Password must be at least 6 characters.');
-            return;
-        }
-        btn.disabled = true;
-        btn.textContent = 'Creating account…';
-        const result = await Auth.signUp(email, password, username);
-        if (!result.success) {
-            btn.disabled = false;
-            btn.textContent = 'Create Account';
-            _showFormError(errEl, result.message);
-            return;
-        }
-        if (result.needsConfirmation) {
-            showSignIn('Account created! Check your email to confirm, then sign in.');
-        }
-        // If email confirmation is disabled, onAuthStateChange handles the redirect
+        const name  = document.getElementById('su-name')?.value.trim();
+        const email = document.getElementById('su-email')?.value.trim();
+        const pass  = document.getElementById('su-pass')?.value;
+        const errEl = document.getElementById('su-error');
+        const btn   = document.getElementById('su-btn');
+        if (!name)              { _showErr(errEl,'Please enter a display name.'); return; }
+        if (!email)             { _showErr(errEl,'Please enter an email address.'); return; }
+        if (!pass||pass.length<6) { _showErr(errEl,'Password must be at least 6 characters.'); return; }
+        btn.disabled=true; btn.textContent='Creating account…';
+        const r = await Auth.signUp(email, pass, name);
+        if (!r.success) { btn.disabled=false; btn.textContent='Create Account'; _showErr(errEl,r.message); return; }
+        if (r.needsConfirmation) showSignIn('Account created! Check your email to confirm.');
     }
 
     function showForgotPassword() {
-        navigate('forgot-password');
         app.innerHTML = `
-            <div class="screen auth-screen">
-                <div class="auth-logo">
-                    <div style="font-size:56px;">🔑</div>
-                    <h1 class="auth-title">Reset Password</h1>
-                    <p class="auth-subtitle">We'll send a reset link to your email</p>
-                </div>
-                <div class="card">
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input id="fp-email" type="email" class="form-input"
-                            placeholder="parent@example.com"
-                            autocomplete="email" autocapitalize="off">
-                    </div>
-                    <div id="fp-error" class="form-error hidden"></div>
-                    <div id="fp-success" class="form-success hidden"></div>
-                    <button id="fp-btn" class="btn btn-primary btn-full mt-12"
-                        onclick="Screens.submitForgotPassword()">Send Reset Link</button>
-                </div>
-                <button class="btn btn-secondary mt-8" onclick="Screens.showSignIn()">← Back to Sign In</button>
+        <div class="screen auth-screen">
+            <div class="auth-logo">
+                <div class="auth-logo-emoji">🔑</div>
+                <h1 class="auth-title">Reset Password</h1>
             </div>
-        `;
+            <div class="card">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input id="fp-email" type="email" class="form-input"
+                        placeholder="parent@example.com"
+                        autocomplete="email" autocapitalize="off">
+                </div>
+                <div id="fp-error" class="form-error hidden"></div>
+                <div id="fp-ok" class="form-success hidden"></div>
+                <button id="fp-btn" class="btn btn-primary btn-full mt-16"
+                    onclick="Screens.submitForgotPassword()">Send Reset Link</button>
+            </div>
+            <button class="btn btn-secondary mt-8"
+                onclick="Screens.showSignIn()">← Back to Sign In</button>
+        </div>`;
     }
 
     async function submitForgotPassword() {
         const email = document.getElementById('fp-email')?.value.trim();
         const errEl = document.getElementById('fp-error');
-        const sucEl = document.getElementById('fp-success');
+        const okEl  = document.getElementById('fp-ok');
         const btn   = document.getElementById('fp-btn');
-        if (!email) { _showFormError(errEl, 'Please enter your email.'); return; }
-        btn.disabled = true;
-        btn.textContent = 'Sending…';
-        const result = await Auth.sendPasswordReset(email);
-        if (!result.success) {
-            btn.disabled = false;
-            btn.textContent = 'Send Reset Link';
-            _showFormError(errEl, result.message);
-            return;
-        }
+        if (!email) { _showErr(errEl,'Please enter your email.'); return; }
+        btn.disabled=true; btn.textContent='Sending…';
+        const r = await Auth.sendPasswordReset(email);
+        if (!r.success) { btn.disabled=false; btn.textContent='Send Reset Link'; _showErr(errEl,r.message); return; }
         errEl.classList.add('hidden');
-        sucEl.textContent = 'Reset link sent! Check your inbox.';
-        sucEl.classList.remove('hidden');
-        btn.textContent = 'Sent ✓';
+        okEl.textContent='Reset link sent! Check your inbox.'; okEl.classList.remove('hidden');
+        btn.textContent='Sent ✓';
     }
 
-    // ===== PROFILE SCREEN =====
+    // ── Home screen ───────────────────────────────────────────────────────────
+
+    async function showHome(tab) {
+        if (tab) _homeTab = tab;
+        const hero     = Heroes.getSelected();
+        const progress = Progression.getProgress();
+        const profile  = await DB.getProfile();
+        const name     = profile?.username || Auth.getUser()?.email?.split('@')[0] || 'Speller';
+        const paused   = TestPause.load();
+
+        app.innerHTML = `
+        <div class="screen home-screen">
+            <div class="home-header">
+                <div class="home-hero-row">
+                    <span class="home-hero">${hero.emoji}</span>
+                    <div class="home-greeting">
+                        <div class="home-name">Hi, ${_esc(name)}!</div>
+                        <div class="home-level">Level ${progress.level} · 🪙 ${progress.coins}</div>
+                    </div>
+                    <button class="btn-icon home-profile-btn"
+                        onclick="Screens.showProfile()">👤</button>
+                </div>
+                <div class="xp-bar-slim">
+                    <div class="xp-bar-slim-fill" style="width:${progress.xpPercentage}%"></div>
+                </div>
+                <div class="xp-bar-label">
+                    ${progress.xpRequired - progress.xp} XP to Level ${progress.level+1}
+                </div>
+            </div>
+
+            ${paused ? `
+            <div class="resume-banner" onclick="Screens.resumeTest()">
+                <span class="resume-icon">⏸</span>
+                <div class="resume-text">
+                    <div class="resume-title">Resume: ${_esc(paused.listName||'Test')}</div>
+                    <div class="resume-sub">
+                        Word ${paused.currentIndex+1} of ${paused.words.length}
+                    </div>
+                </div>
+                <span class="resume-arrow">▶</span>
+            </div>` : ''}
+
+            <div class="home-tabs">
+                <button class="home-tab ${_homeTab==='practice'?'home-tab-active':''}"
+                    onclick="Screens.showHome('practice')">Practice</button>
+                <button class="home-tab ${_homeTab==='manage'?'home-tab-active':''}"
+                    onclick="Screens.showHome('manage')">Manage Lists</button>
+            </div>
+
+            <div id="tab-content" class="tab-content">
+                <div class="section-loading">Loading…</div>
+            </div>
+        </div>`;
+
+        _renderTabContent();
+    }
+
+    async function _renderTabContent() {
+        const el = document.getElementById('tab-content');
+        if (!el) return;
+
+        if (_homeTab === 'practice') {
+            const [lists, lastResults] = await Promise.all([
+                DB.getLists({ status: 'active' }),
+                DB.getLastResultPerList()
+            ]);
+
+            if (lists.length === 0) {
+                el.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <h3>No active spelling lists</h3>
+                    <p>Go to <strong>Manage Lists</strong> to add your first list.</p>
+                    <button class="btn btn-primary mt-16"
+                        onclick="Screens.showHome('manage')">
+                        Go to Manage Lists
+                    </button>
+                </div>`;
+                return;
+            }
+
+            el.innerHTML = lists.map(l => _practiceCard(l, lastResults[l.id])).join('');
+        } else {
+            // Manage tab
+            const [active, archived] = await Promise.all([
+                DB.getLists({ status: 'active' }),
+                DB.getLists({ status: 'archived' })
+            ]);
+
+            el.innerHTML = `
+            <div class="manage-add-row">
+                <button class="btn-add-list" onclick="Screens.showAddList()">
+                    <span>＋</span> Add New Spelling List
+                </button>
+            </div>
+            ${active.length === 0 && archived.length === 0 ? `
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <h3>No lists yet</h3>
+                    <p>Tap above to add your first spelling list.</p>
+                </div>` : ''}
+            ${active.length > 0 ? `
+                <div class="manage-section-title">Active</div>
+                ${active.map(l => _manageCard(l)).join('')}` : ''}
+            ${archived.length > 0 ? `
+                <div class="manage-section-title manage-section-archived">Archived</div>
+                ${archived.map(l => _manageCard(l, true)).join('')}` : ''}`;
+        }
+    }
+
+    function _practiceCard(list, last) {
+        const pct     = last ? _pct(last.words_correct, last.words_attempted) : null;
+        const days    = _daysUntil(list.test_date);
+        const urgency = days !== null && days <= 3 ? 'urgent' : days !== null && days <= 7 ? 'soon' : '';
+
+        const dateTag = list.test_date ? `
+            <span class="test-date-tag ${urgency}">
+                📅 ${days !== null && days >= 0
+                    ? (days === 0 ? 'Test today!' : days === 1 ? 'Test tomorrow!' : `Test in ${days} days`)
+                    : _formatShortDate(list.test_date)}
+            </span>` : '';
+
+        const scoreTag = pct !== null
+            ? `<span class="last-score" style="color:${_scoreColor(pct)}">${pct}%</span>`
+            : `<span class="last-score-none">Not practiced</span>`;
+
+        return `
+        <div class="practice-card" onclick="Screens.startListDirect('${list.id}')">
+            <div class="practice-card-top">
+                <div class="practice-card-info">
+                    <div class="practice-card-name">${_esc(list.name)}</div>
+                    <div class="practice-card-meta">${list.words.length} words</div>
+                    ${dateTag}
+                </div>
+                <div class="practice-card-right">
+                    ${scoreTag}
+                    <div class="practice-play-btn">▶</div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function _manageCard(list, isArchived=false) {
+        const days    = _daysUntil(list.test_date);
+        const dateStr = list.test_date
+            ? `📅 ${_formatShortDate(list.test_date)}`
+            : 'No test date';
+
+        return `
+        <div class="manage-card">
+            <div class="manage-card-info">
+                <div class="manage-card-name">${_esc(list.name)}</div>
+                <div class="manage-card-meta">${list.words.length} words · ${dateStr}</div>
+            </div>
+            <div class="manage-card-actions">
+                <button class="manage-btn" onclick="Screens.editList('${list.id}')">✏️</button>
+                ${isArchived
+                    ? `<button class="manage-btn" onclick="Screens.unarchiveList('${list.id}')">♻️</button>`
+                    : `<button class="manage-btn" onclick="Screens.archiveList('${list.id}')">📦 Archive</button>`}
+                <button class="manage-btn manage-btn-delete"
+                    onclick="Screens.deleteList('${list.id}', this)">🗑</button>
+            </div>
+        </div>`;
+    }
+
+    // ── List actions from home ────────────────────────────────────────────────
+    async function startListDirect(listId) {
+        const lists = await DB.getLists({ status: 'all' });
+        const list  = lists.find(l => l.id === listId);
+        if (!list) return;
+        _activeListId   = list.id;
+        _activeListName = list.name;
+        window._reviewWords = [...list.words];
+        showStartScreen(list.words);
+    }
+
+    async function editList(listId) {
+        const lists = await DB.getLists({ status: 'all' });
+        const list  = lists.find(l => l.id === listId);
+        if (!list) return;
+        _activeListId   = list.id;
+        _activeListName = list.name;
+        window._reviewWords = [...list.words];
+        window._editTestDate = list.test_date || '';
+        _showReviewScreen();
+    }
+
+    async function archiveList(listId) {
+        await DB.archiveList(listId);
+        showHome('manage');
+    }
+
+    async function unarchiveList(listId) {
+        await DB.unarchiveList(listId);
+        showHome('manage');
+    }
+
+    async function deleteList(listId, btn) {
+        if (!confirm('Delete this list? This cannot be undone.')) return;
+        btn.disabled = true;
+        await DB.deleteList(listId);
+        showHome(_homeTab);
+    }
+
+    // ── Add list flow ─────────────────────────────────────────────────────────
+
+    function showAddList() {
+        app.innerHTML = `
+        <div class="screen">
+            ${_header('Screens.showHome(\'manage\')')}
+            <h2 class="screen-title">Add Spelling List</h2>
+            <div class="add-options">
+                <div class="add-option" onclick="Screens.showPhotoCapture()">
+                    <div class="add-option-icon">📸</div>
+                    <div class="add-option-title">Photo</div>
+                    <div class="add-option-sub">Take a photo of your spelling sheet</div>
+                </div>
+                <div class="add-option" onclick="Screens.showTypeWords()">
+                    <div class="add-option-icon">✏️</div>
+                    <div class="add-option-title">Type</div>
+                    <div class="add-option-sub">Enter words manually</div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function showPhotoCapture() {
+        app.innerHTML = `
+        <div class="screen">
+            ${_header('Screens.showAddList()')}
+            <div class="capture-body">
+                <div class="capture-icon">📸</div>
+                <h2>Photo your spelling sheet</h2>
+                <p>Works with multiple lists on one page</p>
+                <button class="btn btn-primary capture-btn"
+                    onclick="Screens.captureAndProcess()">
+                    📷 Take Photo / Choose Image
+                </button>
+                <div id="ocr-status" style="display:none;width:100%;margin-top:20px;">
+                    <p class="ocr-reading-text">Reading your spelling list…</p>
+                    <div class="xp-bar">
+                        <div class="xp-bar-fill" id="ocr-progress" style="width:0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    async function captureAndProcess() {
+        try {
+            const imageData = await OCR.captureImage();
+            document.getElementById('ocr-status').style.display = 'block';
+            const lists = await OCR.recognizeMultipleLists(imageData, pct => {
+                const el = document.getElementById('ocr-progress');
+                if (el) el.style.width = pct + '%';
+            });
+            if (lists.length === 0) { alert('No words found. Try a clearer photo.'); return; }
+            if (lists.length === 1) {
+                _activeListId   = null;
+                _activeListName = lists[0].name;
+                window._reviewWords  = [...lists[0].words];
+                window._editTestDate = '';
+                _showReviewScreen();
+            } else {
+                _showMultiPicker(lists);
+            }
+        } catch (err) {
+            console.error('OCR error:', err);
+            alert('Could not read the image. Please try again.');
+        }
+    }
+
+    function _showMultiPicker(lists) {
+        window._ocrLists = lists;
+        app.innerHTML = `
+        <div class="screen">
+            ${_header('Screens.showPhotoCapture()')}
+            <h2 class="screen-title">Found ${lists.length} lists</h2>
+            <p class="screen-sub">Each will be saved separately</p>
+            <div class="multi-list-grid">
+                ${lists.map((l,i) => `
+                <div class="multi-list-card" onclick="Screens.pickOneList(${i})">
+                    <div class="multi-list-header">
+                        <span class="multi-list-icon">📋</span>
+                        <span class="multi-list-name">${_esc(l.name)}</span>
+                    </div>
+                    <div class="multi-list-words">
+                        ${l.words.slice(0,5).map(w =>
+                            `<span class="word-chip">${_esc(w)}</span>`).join('')}
+                        ${l.words.length>5
+                            ? `<span class="word-chip word-chip-more">+${l.words.length-5}</span>`
+                            : ''}
+                    </div>
+                    <div class="multi-list-count">${l.words.length} words</div>
+                </div>`).join('')}
+            </div>
+            <button class="btn btn-primary mt-16"
+                onclick="Screens.saveAllAndGoHome()">
+                💾 Save All Lists &amp; Go to Practice
+            </button>
+        </div>`;
+    }
+
+    function pickOneList(i) {
+        const list = window._ocrLists?.[i];
+        if (!list) return;
+        _activeListId   = null;
+        _activeListName = list.name;
+        window._reviewWords  = [...list.words];
+        window._editTestDate = '';
+        _showReviewScreen();
+    }
+
+    async function saveAllAndGoHome() {
+        const lists = window._ocrLists || [];
+        if (lists.length === 0) { showHome('manage'); return; }
+
+        // Show saving state
+        const btn = document.querySelector('.btn-primary');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+        await DB.saveAllLists(lists);
+        showHome('practice');
+    }
+
+    function showTypeWords() {
+        app.innerHTML = `
+        <div class="screen">
+            ${_header('Screens.showAddList()')}
+            <div class="card mt-16">
+                <h2 class="card-title">Type your words</h2>
+                <p class="card-sub">One word per line</p>
+                <textarea id="manual-words" rows="12" class="form-textarea"
+                    placeholder="beautiful&#10;necessary&#10;environment"></textarea>
+            </div>
+            <button class="btn btn-primary mt-12"
+                onclick="Screens.processTypeWords()">Next →</button>
+        </div>`;
+        setTimeout(() => document.getElementById('manual-words')?.focus(), 100);
+    }
+
+    function processTypeWords() {
+        const ta = document.getElementById('manual-words');
+        if (!ta) return;
+        const words = ta.value.split('\n')
+            .map(w => w.replace(/^\s*[\d]+[\.\)\-\s]*/g,'').trim().toLowerCase())
+            .filter(w => w.length >= 2);
+        if (words.length === 0) { alert('Please enter at least one word.'); return; }
+        _activeListId   = null;
+        _activeListName = '';
+        window._reviewWords  = words;
+        window._editTestDate = '';
+        _showReviewScreen();
+    }
+
+    // ── Review screen ─────────────────────────────────────────────────────────
+
+    function _showReviewScreen() {
+        const words  = window._reviewWords;
+        const isNew  = !_activeListId;
+        const items  = words.map((w,i) => `
+            <div class="word-item">
+                <span class="word-item-num">${i+1}.</span>
+                <input class="word-item-input" value="${_esc(w)}"
+                    onchange="Screens._wordChange(${i},this.value)"
+                    autocomplete="off" autocorrect="off"
+                    autocapitalize="off" spellcheck="false">
+                <button class="word-item-del"
+                    onclick="Screens._wordDel(${i})">✕</button>
+            </div>`).join('');
+
+        app.innerHTML = `
+        <div class="screen">
+            ${_header(isNew ? 'Screens.showAddList()' : 'Screens.showHome(\'manage\')')}
+            <div class="card mt-12">
+                <label class="form-label">List name *</label>
+                <input id="list-name" class="form-input"
+                    placeholder="e.g. Week 3 – Stop Thief"
+                    value="${_esc(_activeListName||'')}"
+                    autocomplete="off" autocorrect="off">
+                <div id="name-err" class="form-error hidden mt-8">
+                    Please enter a list name.
+                </div>
+                <label class="form-label mt-16">School test date (optional)</label>
+                <input id="test-date" type="date" class="form-input"
+                    value="${window._editTestDate||''}">
+            </div>
+            <div class="card">
+                <div class="review-header">
+                    <span class="form-label" style="margin:0">
+                        Words (${words.length})
+                    </span>
+                    <button class="btn btn-secondary btn-small"
+                        onclick="Screens._wordAdd()">+ Add</button>
+                </div>
+                <div id="word-list">${items}</div>
+            </div>
+            <button class="btn btn-primary btn-full mt-12"
+                onclick="Screens.confirmAndSave()">
+                ${isNew ? '💾 Save &amp; Start Spelling' : '✓ Save Changes &amp; Start Spelling'}
+            </button>
+        </div>`;
+    }
+
+    function _wordChange(i,v) { window._reviewWords[i] = v.trim().toLowerCase(); }
+    function _wordDel(i)    { window._reviewWords.splice(i,1); _showReviewScreen(); }
+    function _wordAdd()     {
+        window._reviewWords.push('');
+        _showReviewScreen();
+        setTimeout(() => {
+            const inputs = document.querySelectorAll('.word-item-input');
+            inputs[inputs.length-1]?.focus();
+        }, 50);
+    }
+
+    async function confirmAndSave() {
+        const name     = document.getElementById('list-name')?.value.trim();
+        const testDate = document.getElementById('test-date')?.value || null;
+        const nameErr  = document.getElementById('name-err');
+        if (!name) { nameErr?.classList.remove('hidden'); document.getElementById('list-name')?.focus(); return; }
+        nameErr?.classList.add('hidden');
+
+        const words = window._reviewWords.filter(w => w.trim().length > 0);
+        if (words.length === 0) { alert('Please add at least one word.'); return; }
+
+        _activeListName = name;
+        window._reviewWords = words;
+
+        if (Auth.isSignedIn()) {
+            const result = await DB.saveList(name, words, _activeListId||null, { testDate });
+            if (result.success && !_activeListId) {
+                _activeListId = result.id;
+            }
+        }
+        showStartScreen(words);
+    }
+
+    // ── Start screen ──────────────────────────────────────────────────────────
+
+    function showStartScreen(words) {
+        app.innerHTML = `
+        <div class="screen start-screen">
+            ${_header('Screens.showHome()')}
+            <div class="start-body">
+                <div class="start-hero">${Heroes.getSelected().emoji}</div>
+                <h2 class="start-name">${_esc(_activeListName||'Spelling Test')}</h2>
+                <p class="start-meta">${words.length} words · listen carefully!</p>
+                <div class="mode-toggle">
+                    <button id="mode-kb"
+                        class="${window._testMode!=='paper'?'active':''}"
+                        onclick="window._testMode='keyboard';
+                            document.getElementById('mode-kb').classList.add('active');
+                            document.getElementById('mode-pa').classList.remove('active');">
+                        ⌨️ Keyboard
+                    </button>
+                    <button id="mode-pa"
+                        class="${window._testMode==='paper'?'active':''}"
+                        onclick="window._testMode='paper';
+                            document.getElementById('mode-pa').classList.add('active');
+                            document.getElementById('mode-kb').classList.remove('active');">
+                        ✍️ Paper
+                    </button>
+                </div>
+                <button class="btn btn-primary start-btn"
+                    onclick="Screens.startTest(${JSON.stringify(words).replace(/"/g,'&quot;')})">
+                    ▶ Start Spelling
+                </button>
+            </div>
+        </div>`;
+    }
+
+    // ── Test ──────────────────────────────────────────────────────────────────
+
+    function startTest(words) {
+        testState = { words, currentIndex:0, results:[], mistakes:[] };
+        _showTestWord();
+    }
+
+    function resumeTest() {
+        const p = TestPause.load();
+        if (!p) { showHome(); return; }
+        _activeListId   = p.listId;
+        _activeListName = p.listName;
+        testState = {
+            words:        p.words,
+            currentIndex: p.currentIndex,
+            results:      p.results,
+            mistakes:     p.mistakes
+        };
+        TestPause.clear();
+        _showTestWord();
+    }
+
+    function _showTestWord() {
+        const { words, currentIndex } = testState;
+        const word    = words[currentIndex];
+        const isPaper = window._testMode === 'paper';
+        Keyboard.reset();
+
+        app.innerHTML = `
+        <div class="screen test-screen">
+            <div class="test-topbar">
+                <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
+                <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
+                <div class="test-counter">${currentIndex+1}/${words.length}</div>
+            </div>
+            <div class="test-prog-bar">
+                <div class="test-prog-fill"
+                    style="width:${Math.round((currentIndex/words.length)*100)}%">
+                </div>
+            </div>
+            <div class="listen-area">
+                <button class="listen-btn" onclick="Screens.listenWord()">🔊 Listen</button>
+                <button class="listen-btn listen-sm" onclick="Screens.replayWord()">🔊 Again</button>
+            </div>
+            <div class="answer-display" id="answer-display">
+                ${isPaper ? 'Write on paper, then take a photo' : 'Type your answer below'}
+            </div>
+            ${isPaper ? `
+            <div class="text-center mt-16">
+                <button class="btn btn-primary"
+                    onclick="Screens.paperCapture()">
+                    📸 Take Photo of Answer
+                </button>
+            </div>` : ''}
+            <div id="keyboard-container"></div>
+        </div>`;
+
+        if (!isPaper) {
+            Keyboard.setCallbacks(
+                val => {
+                    const d = document.getElementById('answer-display');
+                    if (d) {
+                        d.textContent = val || 'Type your answer below';
+                        d.className = val ? 'answer-display answer-filled' : 'answer-display';
+                    }
+                },
+                val => _checkAnswer(val)
+            );
+            document.getElementById('keyboard-container')
+                .appendChild(Keyboard.render());
+        }
+        setTimeout(() => Voice.pronounceWord(word), 400);
+    }
+
+    function exitTest() {
+        // Pause modal
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal exit-modal">
+                <div class="exit-modal-title">Exit Test?</div>
+                <div class="exit-modal-sub">
+                    Word ${testState.currentIndex+1} of ${testState.words.length}
+                </div>
+                <button class="btn btn-primary mt-16"
+                    onclick="Screens.pauseTest()">
+                    ⏸ Pause &amp; Resume Later
+                </button>
+                <button class="btn btn-secondary mt-8"
+                    onclick="Screens.abandonTest()">
+                    ✕ Abandon Test
+                </button>
+                <button class="btn-text mt-12"
+                    onclick="document.querySelector('.modal-overlay').remove()">
+                    Keep Going
+                </button>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+
+    function pauseTest() {
+        document.querySelector('.modal-overlay')?.remove();
+        TestPause.save({
+            words:        testState.words,
+            currentIndex: testState.currentIndex,
+            results:      testState.results,
+            mistakes:     testState.mistakes,
+            listId:       _activeListId,
+            listName:     _activeListName
+        });
+        showHome();
+    }
+
+    function abandonTest() {
+        document.querySelector('.modal-overlay')?.remove();
+        TestPause.clear();
+        showHome();
+    }
+
+    function listenWord() { Voice.pronounceWord(testState.words[testState.currentIndex]); }
+    function replayWord()  { Voice.speak(testState.words[testState.currentIndex]); }
+
+    async function paperCapture() {
+        const word = testState.words[testState.currentIndex];
+        try {
+            const img  = await Handwriting.captureAnswer();
+            const text = await Handwriting.recognizeHandwriting(img, word);
+            _showPaperConfirm(text, img);
+        } catch (err) {
+            console.error('Paper capture:', err);
+            alert('Could not capture. Please try again.');
+        }
+    }
+
+    function _showPaperConfirm(recognized, img) {
+        app.innerHTML = `
+        <div class="screen">
+            <div class="test-topbar">
+                <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
+                <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
+                <div class="test-counter">
+                    ${testState.currentIndex+1}/${testState.words.length}
+                </div>
+            </div>
+            <img src="${img}" class="camera-preview" alt="Your handwriting">
+            <div class="ocr-confirm">
+                <p class="ocr-confirm-label">I read:</p>
+                <div class="ocr-result">${_esc(recognized||'(nothing detected)')}</div>
+                <p class="ocr-confirm-sub">Is this what you wrote?</p>
+                <div class="flex-row">
+                    <button class="btn btn-success"
+                        onclick="Screens.confirmPaper()">✓ Yes</button>
+                    <button class="btn btn-secondary"
+                        onclick="Screens.editPaper()">✏️ Edit</button>
+                </div>
+            </div>
+        </div>`;
+        window._paperRecognized = recognized;
+    }
+
+    function confirmPaper() { _checkAnswer(window._paperRecognized||''); }
+
+    function editPaper() {
+        const m = document.createElement('div');
+        m.className = 'modal-overlay';
+        m.innerHTML = `
+            <div class="modal">
+                <h3>Correct your answer</h3>
+                <input type="text" id="paper-edit" class="form-input mt-12"
+                    value="${_esc(window._paperRecognized||'')}"
+                    autocomplete="off" autocorrect="off"
+                    autocapitalize="off" spellcheck="false">
+                <button class="btn btn-primary mt-12"
+                    onclick="Screens.submitPaperEdit()">✓ Confirm</button>
+            </div>`;
+        document.body.appendChild(m);
+        setTimeout(() => document.getElementById('paper-edit')?.focus(), 100);
+    }
+
+    function submitPaperEdit() {
+        const val = document.getElementById('paper-edit')?.value.trim()||'';
+        document.querySelector('.modal-overlay')?.remove();
+        _checkAnswer(val);
+    }
+
+    function _checkAnswer(userAnswer) {
+        const word    = testState.words[testState.currentIndex];
+        const correct = Checker.check(userAnswer, word);
+        testState.results.push({ word, userAnswer:userAnswer.trim().toLowerCase(), correct });
+        if (!correct) testState.mistakes.push(word);
+        let lvl = null;
+        if (correct) { lvl = Progression.addXP(10); Progression.addCoins(1); }
+        _showFeedback(correct, word, userAnswer, lvl);
+    }
+
+    function _showFeedback(correct, word, userAnswer, lvl) {
+        app.innerHTML = `
+        <div class="screen feedback-screen">
+            <div class="test-topbar">
+                <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
+                <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
+                <div class="test-counter">
+                    ${testState.currentIndex+1}/${testState.words.length}
+                </div>
+            </div>
+            <div class="feedback-body">
+                <div class="fb-icon">${correct?'🎉':'❌'}</div>
+                <div class="fb-title ${correct?'fb-correct':'fb-wrong'}">
+                    ${correct?'Correct!':'Not quite'}
+                </div>
+                ${correct
+                    ? `<div class="fb-xp">+10 ⭐ &nbsp; +1 🪙</div>`
+                    : `<div class="fb-detail">
+                           <div class="fb-row">
+                               <span class="fb-lbl">You wrote:</span>
+                               <span class="fb-word-wrong">${_esc(userAnswer||'(empty)')}</span>
+                           </div>
+                           <div class="fb-row mt-8">
+                               <span class="fb-lbl">Correct:</span>
+                               <span class="fb-word-right">${_esc(word)}</span>
+                           </div>
+                       </div>`}
+            </div>
+            <button class="btn btn-primary feedback-next"
+                onclick="Screens.nextWord()">
+                ${testState.currentIndex < testState.words.length-1
+                    ? 'Next Word →' : 'See Results 🏆'}
+            </button>
+        </div>`;
+        if (lvl?.leveledUp) setTimeout(() => Animations.showLevelUp(lvl.newLevel), 500);
+    }
+
+    function nextWord() {
+        testState.currentIndex++;
+        if (testState.currentIndex >= testState.words.length) showResults();
+        else _showTestWord();
+    }
+
+    // ── Results ───────────────────────────────────────────────────────────────
+
+    async function showResults() {
+        TestPause.clear(); // any paused state is now stale
+        const { results, mistakes, words } = testState;
+        const correct = results.filter(r=>r.correct).length;
+        const total   = words.length;
+        const pct     = _pct(correct, total);
+        const medal   = pct===100?'🥇':pct>=80?'🥈':pct>=60?'🥉':'📝';
+
+        Store.update(d => {
+            d.totalWordsCorrect   += correct;
+            d.totalWordsAttempted += total;
+            if (mistakes.length>0) {
+                const newM = mistakes.filter(m=>!d.mistakeHistory.includes(m));
+                d.mistakeHistory = [...d.mistakeHistory,...newM].slice(-50);
+            }
+        });
+
+        if (Auth.isSignedIn()) {
+            DB.saveResult({
+                listId:         _activeListId,
+                listName:       _activeListName||'Spelling Test',
+                wordsAttempted: total,
+                wordsCorrect:   correct,
+                mistakes
+            }).catch(e=>console.warn('saveResult:',e));
+        }
+
+        app.innerHTML = `
+        <div class="screen results-screen">
+            <div class="results-hero-card">
+                <div class="results-medal">${medal}</div>
+                <div class="results-list-name">${_esc(_activeListName||'Spelling Test')}</div>
+                <div class="results-score" style="color:${_scoreColor(pct)}">${pct}%</div>
+                <div class="results-fraction">${correct} / ${total} words</div>
+                <div class="results-rewards">+${correct*10} ⭐ &nbsp; +${correct} 🪙</div>
+            </div>
+
+            ${mistakes.length>0 ? `
+            <div class="card">
+                <h3 class="card-title">Practice these 🔁</h3>
+                <div class="mistakes-list">
+                    ${mistakes.map(m=>`<div class="mistake-item">❌ ${_esc(m)}</div>`).join('')}
+                </div>
+                <button class="btn btn-primary btn-full mt-12"
+                    onclick="Screens.practiceMistakes()">
+                    🔁 Practice Mistakes Only
+                </button>
+            </div>` : `
+            <div class="card text-center">
+                <p style="font-size:22px;">🌟 Perfect score!</p>
+            </div>`}
+
+            <div class="results-actions">
+                <button class="btn btn-primary" onclick="Screens.practiceAgain()">
+                    ▶ Practice Again
+                </button>
+                <button class="btn btn-secondary" onclick="Screens.showHome()">
+                    🏠 Home
+                </button>
+            </div>
+        </div>`;
+    }
+
+    function practiceMistakes() {
+        if (!testState.mistakes.length) return;
+        window._reviewWords = [...testState.mistakes];
+        showStartScreen(testState.mistakes);
+    }
+
+    function practiceAgain() {
+        window._reviewWords = [...testState.words];
+        showStartScreen(testState.words);
+    }
+
+    // ── Results history ───────────────────────────────────────────────────────
+
+    async function showResultsHistory() {
+        app.innerHTML = `
+        <div class="screen">
+            ${_header('Screens.showHome()')}
+            <div class="card mt-12 text-center">
+                <p style="color:var(--text-light)">Loading…</p>
+            </div>
+        </div>`;
+
+        const results = await DB.getResults({ limit:50 });
+
+        if (results.length===0) {
+            app.innerHTML = `
+            <div class="screen">
+                ${_header('Screens.showHome()')}
+                <div class="empty-state mt-24">
+                    <div class="empty-icon">📊</div>
+                    <h3>No results yet</h3>
+                    <p>Complete a spelling test to see your history here.</p>
+                </div>
+            </div>`;
+            return;
+        }
+
+        app.innerHTML = `
+        <div class="screen">
+            ${_header('Screens.showHome()')}
+            <div class="card mt-12">
+                <h2 class="card-title">📊 Results History</h2>
+                <div class="results-history">
+                    ${results.map(r => {
+                        const p = _pct(r.words_correct, r.words_attempted);
+                        const m = p===100?'🥇':p>=80?'🥈':p>=60?'🥉':'📝';
+                        return `
+                        <div class="result-row">
+                            <div class="result-medal">${m}</div>
+                            <div class="result-info">
+                                <div class="result-name">
+                                    ${_esc(r.list_name||'Spelling Test')}
+                                </div>
+                                <div class="result-meta">${_formatDate(r.completed_at)}</div>
+                            </div>
+                            <div class="result-score-col">
+                                <span class="result-frac">
+                                    ${r.words_correct}/${r.words_attempted}
+                                </span>
+                                <span class="result-pct"
+                                    style="color:${_scoreColor(p)}">${p}%</span>
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // ── Profile ───────────────────────────────────────────────────────────────
 
     async function showProfile() {
-        navigate('profile');
         app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card text-center">
-                    <div style="font-size:48px;margin-bottom:8px;">👤</div>
-                    <p style="color:var(--text-light);font-size:13px;">Loading…</p>
-                </div>
+        <div class="screen">
+            ${_header('Screens.showHome()')}
+            <div class="card text-center mt-12">
+                <p style="color:var(--text-light)">Loading…</p>
             </div>
-        `;
-        const profile = await DB.getProfile();
-        const stats   = await DB.getStats();
-        const user    = Auth.getUser();
+        </div>`;
+
+        const [profile, stats] = await Promise.all([DB.getProfile(), DB.getStats()]);
+        const user = Auth.getUser();
 
         app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card text-center">
-                    <div style="font-size:48px;margin-bottom:8px;">${Heroes.getSelected().emoji}</div>
-                    <h2>${profile?.username || user?.email || 'Speller'}</h2>
-                    <p style="color:var(--text-light);font-size:13px;">${user?.email || ''}</p>
+        <div class="screen">
+            ${_header('Screens.showHome()')}
+            <div class="card text-center mt-12">
+                <div style="font-size:48px;margin-bottom:8px;">
+                    ${Heroes.getSelected().emoji}
                 </div>
-                <div class="card">
-                    <h3 style="margin-bottom:12px;">📊 Stats</h3>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.totalTests}</div>
-                            <div class="stat-label">Tests taken</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.totalCorrect}</div>
-                            <div class="stat-label">Words correct</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.accuracy}%</div>
-                            <div class="stat-label">Accuracy</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">Lv ${Progression.getProgress().level}</div>
-                            <div class="stat-label">Level</div>
-                        </div>
+                <h2>${_esc(profile?.username||user?.email||'Speller')}</h2>
+                <p style="color:var(--text-light);font-size:13px;">${user?.email||''}</p>
+            </div>
+            <div class="card">
+                <h3 class="card-title">📊 Stats</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">${stats.totalTests}</div>
+                        <div class="stat-label">Tests</div>
                     </div>
-                </div>
-                ${stats.commonMistakes.length > 0 ? `
-                    <div class="card">
-                        <h3 style="margin-bottom:8px;">🔁 Most missed words</h3>
-                        <div class="mistakes-list">
-                            ${stats.commonMistakes.map(m =>
-                                `<div class="mistake-item">❌ ${m.word} <span style="color:var(--text-light);font-size:12px;">(${m.count}×)</span></div>`
-                            ).join('')}
-                        </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${stats.totalCorrect}</div>
+                        <div class="stat-label">Correct</div>
                     </div>
-                ` : ''}
-                <div class="card">
-                    <h3 style="margin-bottom:4px;">⚙️ Settings</h3>
-                    <p style="font-size:12px;color:var(--text-light);margin-bottom:12px;">
-                        Gemini API key improves photo word list accuracy
-                    </p>
-                    <div class="flex-row" style="gap:8px;align-items:center;">
-                        <input id="gemini-key-input" type="password" class="form-input" style="flex:1;"
-                            placeholder="Paste Gemini API key…"
-                            value="${OCR.hasApiKey() ? '••••••••••••••••' : ''}"
-                            autocomplete="off">
-                        <button class="btn btn-secondary btn-small" onclick="Screens.saveGeminiKey()">
-                            💾 Save
-                        </button>
-                        ${OCR.hasApiKey() ? `<button class="btn btn-small btn-danger" onclick="Screens.clearGeminiKey()">✕</button>` : ''}
+                    <div class="stat-item">
+                        <div class="stat-value">${stats.accuracy}%</div>
+                        <div class="stat-label">Accuracy</div>
                     </div>
-                    <div id="gemini-key-msg" class="form-success hidden" style="margin-top:6px;"></div>
-                    ${OCR.hasApiKey() ? '<p style="font-size:12px;color:var(--success);margin-top:6px;">✓ Gemini OCR active</p>' : '<p style="font-size:12px;color:var(--text-light);margin-top:6px;">No key set — using Tesseract fallback</p>'}
-                </div>
-                <div class="flex-row mt-12">
-                    <button class="btn btn-secondary" onclick="Screens.showHome()">🏠 Home</button>
-                    <button class="btn btn-danger" onclick="Screens.confirmSignOut()">Sign Out</button>
+                    <div class="stat-item">
+                        <div class="stat-value">Lv ${Progression.getProgress().level}</div>
+                        <div class="stat-label">Level</div>
+                    </div>
                 </div>
             </div>
-        `;
+            ${stats.commonMistakes.length>0?`
+            <div class="card">
+                <h3 class="card-title">🔁 Most missed</h3>
+                <div class="mistakes-list">
+                    ${stats.commonMistakes.map(m=>`
+                    <div class="mistake-item">❌ ${_esc(m.word)}
+                        <span style="color:var(--text-light);font-size:12px;">(${m.count}×)</span>
+                    </div>`).join('')}
+                </div>
+            </div>`:''}
+            <div class="card">
+                <h3 class="card-title">⚙️ Settings</h3>
+                <label class="form-label mt-8">
+                    Gemini API key
+                    <span class="form-hint">Improves photo list accuracy</span>
+                </label>
+                <input id="gemini-key" type="password" class="form-input mt-8"
+                    placeholder="Paste Gemini API key here…"
+                    value="${OCR.hasApiKey()?'••••••••••••••••':''}"
+                    autocomplete="off">
+                <div class="settings-key-status mt-8">
+                    ${OCR.hasApiKey()
+                        ? '<span style="color:var(--success)">✓ Gemini OCR active</span>'
+                        : '<span style="color:var(--text-light)">No key — using Tesseract fallback</span>'}
+                </div>
+                <div class="flex-row mt-12" style="gap:8px;">
+                    <button class="btn btn-secondary" style="flex:1;width:auto;"
+                        onclick="Screens.saveGeminiKey()">💾 Save Key</button>
+                    ${OCR.hasApiKey()
+                        ?`<button class="btn btn-danger" style="flex:0 0 52px;width:52px;"
+                            onclick="Screens.clearGeminiKey()">✕</button>`:''}
+                </div>
+            </div>
+            <div class="card">
+                <button class="btn btn-secondary btn-full"
+                    onclick="Screens.showHeroShop()">🏪 Hero Shop</button>
+                <button class="btn btn-secondary btn-full mt-8"
+                    onclick="Screens.showResultsHistory()">📊 Results History</button>
+            </div>
+            <div style="padding:0 20px 24px;">
+                <button class="btn btn-danger"
+                    onclick="Screens.confirmSignOut()">Sign Out</button>
+            </div>
+        </div>`;
     }
 
     function saveGeminiKey() {
-        const input = document.getElementById('gemini-key-input');
-        const msgEl = document.getElementById('gemini-key-msg');
-        const val   = input?.value.trim();
-        if (!val || val.startsWith('•')) return;
+        const val = document.getElementById('gemini-key')?.value.trim();
+        if (!val||val.startsWith('•')) return;
         OCR.setApiKey(val);
-        if (msgEl) { msgEl.textContent = '✓ Key saved!'; msgEl.classList.remove('hidden'); }
-        setTimeout(() => showProfile(), 1000);
+        setTimeout(()=>showProfile(), 300);
     }
 
-    function clearGeminiKey() {
-        OCR.setApiKey('');
-        showProfile();
-    }
+    function clearGeminiKey() { OCR.setApiKey(''); showProfile(); }
 
     async function confirmSignOut() {
         if (!confirm('Sign out of SpellQuest?')) return;
@@ -323,917 +1149,76 @@ const Screens = (() => {
         showSignIn();
     }
 
-    // ===== HOME SCREEN =====
-
-    function showHome() {
-        navigate('home');
-        const progress = Progression.getProgress();
-        const xpNeeded = progress.xpRequired - progress.xp;
-
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="xp-bar-container">
-                    <div class="xp-label">
-                        <span>Level ${progress.level}</span>
-                        <span>${xpNeeded} XP until Level ${progress.level + 1}</span>
-                    </div>
-                    <div class="xp-bar">
-                        <div class="xp-bar-fill" style="width:${progress.xpPercentage}%"></div>
-                    </div>
-                </div>
-                <div class="home-actions">
-                    <div class="action-card" onclick="Screens.showListInput()">
-                        <div class="action-icon">📸</div>
-                        <div class="action-text">
-                            <h3>Photo Spelling List</h3>
-                            <p>Take a photo or upload your list</p>
-                        </div>
-                    </div>
-                    <div class="action-card" onclick="Screens.showManualInput()">
-                        <div class="action-icon">✏️</div>
-                        <div class="action-text">
-                            <h3>Type Spelling List</h3>
-                            <p>Enter words manually</p>
-                        </div>
-                    </div>
-                    <div class="action-card" onclick="Screens.showSavedLists()">
-                        <div class="action-icon">📚</div>
-                        <div class="action-text">
-                            <h3>Saved Lists</h3>
-                            <p>Practice a previous list</p>
-                        </div>
-                    </div>
-                    <div class="action-card" onclick="Screens.showResultsHistory()">
-                        <div class="action-icon">📊</div>
-                        <div class="action-text">
-                            <h3>Results History</h3>
-                            <p>See past test scores</p>
-                        </div>
-                    </div>
-                    <div class="action-card" onclick="Screens.showHeroShop()">
-                        <div class="action-icon">🏪</div>
-                        <div class="action-text">
-                            <h3>Hero Shop</h3>
-                            <p>Spend coins on new heroes</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // ===== MANUAL INPUT =====
-
-    function showManualInput() {
-        navigate('manual-input');
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card">
-                    <h2 style="margin-bottom:12px;">✏️ Type Your Words</h2>
-                    <p style="font-size:13px;color:var(--text-light);margin-bottom:16px;">
-                        Enter one word per line
-                    </p>
-                    <textarea id="manual-words" rows="10"
-                        placeholder="beautiful&#10;necessary&#10;environment&#10;temperature&#10;knowledge"
-                        style="width:100%;padding:12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:16px;resize:vertical;outline:none;font-family:inherit;"
-                    ></textarea>
-                </div>
-                <div class="flex-row mt-12">
-                    <button class="btn btn-secondary" onclick="Screens.showHome()">← Back</button>
-                    <button class="btn btn-primary" onclick="Screens.processManualInput()">Next →</button>
-                </div>
-            </div>
-        `;
-        setTimeout(() => document.getElementById('manual-words')?.focus(), 100);
-    }
-
-    function processManualInput() {
-        const ta = document.getElementById('manual-words');
-        if (!ta) return;
-        const words = ta.value.split('\n')
-            .map(w => w.replace(/^\s*[\d]+[\.\)\-\s]*/g, '').trim().toLowerCase())
-            .filter(w => w.length >= 2);
-        if (words.length === 0) { alert('Please enter at least one word.'); return; }
-        showListReview(words);
-    }
-
-    // ===== PHOTO INPUT =====
-
-    function showListInput() {
-        navigate('list-input');
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card text-center">
-                    <h2 style="margin-bottom:12px;">📸 Photo Spelling List</h2>
-                    <p style="font-size:13px;color:var(--text-light);margin-bottom:20px;">
-                        Take a photo of your printed spelling list or choose from gallery
-                    </p>
-                    <button class="btn btn-primary" onclick="Screens.captureList()">
-                        📷 Take Photo / Choose Image
-                    </button>
-                    <div id="ocr-status" class="mt-16" style="display:none;">
-                        <p style="font-size:14px;color:var(--text-light);">Reading your spelling list…</p>
-                        <div class="xp-bar mt-8">
-                            <div class="xp-bar-fill" id="ocr-progress" style="width:0%"></div>
-                        </div>
-                    </div>
-                </div>
-                <button class="btn btn-secondary mt-12" onclick="Screens.showHome()">← Back</button>
-            </div>
-        `;
-    }
-
-    async function captureList() {
-        try {
-            const imageData  = await OCR.captureImage();
-            const statusEl   = document.getElementById('ocr-status');
-            const progressEl = document.getElementById('ocr-progress');
-            if (statusEl) statusEl.style.display = 'block';
-
-            const lists = await OCR.recognizeMultipleLists(imageData, pct => {
-                if (progressEl) progressEl.style.width = pct + '%';
-            });
-
-            if (lists.length === 0) {
-                alert('No words found. Try again with a clearer photo.');
-                return;
-            }
-
-            if (lists.length === 1) {
-                // Single list — go straight to review
-                _activeListName = lists[0].name;
-                showListReview(lists[0].words);
-            } else {
-                // Multiple lists found — let user pick
-                showMultiListPicker(lists);
-            }
-        } catch (err) {
-            console.error('OCR error:', err);
-            alert('Could not read the image. Please try again.');
-        }
-    }
-
-    function showMultiListPicker(lists) {
-        navigate('multi-list-picker');
-
-        const cards = lists.map((list, i) => `
-            <div class="multi-list-card" onclick="Screens.pickList(${i})">
-                <div class="multi-list-header">
-                    <span class="multi-list-icon">📋</span>
-                    <span class="multi-list-name">${_esc(list.name)}</span>
-                </div>
-                <div class="multi-list-words">
-                    ${list.words.slice(0, 5).map(w => `<span class="word-chip">${w}</span>`).join('')}
-                    ${list.words.length > 5 ? `<span class="word-chip word-chip-more">+${list.words.length - 5} more</span>` : ''}
-                </div>
-                <div class="multi-list-count">${list.words.length} words</div>
-            </div>
-        `).join('');
-
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card">
-                    <h2 style="margin-bottom:4px;">📸 Found ${lists.length} Lists</h2>
-                    <p style="font-size:13px;color:var(--text-light);margin-bottom:16px;">
-                        Tap a list to practise it, or start all lists together
-                    </p>
-                    <div class="multi-list-grid">${cards}</div>
-                </div>
-                <button class="btn btn-primary mt-8"
-                    onclick="Screens.pickAllLists()">
-                    ▶ Start All Lists Together
-                </button>
-                <button class="btn btn-secondary mt-8" onclick="Screens.showListInput()">← Retake Photo</button>
-            </div>
-        `;
-
-        // Stash lists for picker callbacks
-        window._ocrLists = lists;
-    }
-
-    function pickList(index) {
-        const list = window._ocrLists[index];
-        if (!list) return;
-        _activeListName = list.name;
-        showListReview(list.words);
-    }
-
-    function pickAllLists() {
-        const allWords = (window._ocrLists || []).flatMap(l => l.words);
-        const unique   = [...new Set(allWords)];
-        _activeListName = 'All Lists';
-        showListReview(unique);
-    }
-
-    // ===== LIST REVIEW =====
-
-    function showListReview(words) {
-        navigate('list-review');
-        window._reviewWords = [...words];
-        _activeListId   = null;
-        _activeListName = null;
-        renderReviewScreen();
-    }
-
-    function renderReviewScreen() {
-        const words = window._reviewWords;
-        const wordItems = words.map((w, i) => `
-            <div class="word-item" data-index="${i}">
-                <span class="word-item-number">${i + 1}.</span>
-                <input class="word-item-input" value="${w}"
-                    onchange="Screens.updateReviewWord(${i}, this.value)"
-                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-                <button class="word-item-delete" onclick="Screens.deleteReviewWord(${i})">✕</button>
-            </div>
-        `).join('');
-
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card">
-                    <h2 style="margin-bottom:4px;">Check Your Spelling List</h2>
-                    <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">
-                        Edit, delete or add words before starting
-                    </p>
-                    <div class="word-list">${wordItems}</div>
-                    <button class="btn btn-secondary btn-small mt-8" onclick="Screens.addReviewWord()">
-                        + Add Word
-                    </button>
-                </div>
-                ${Auth.isSignedIn() ? `
-                    <div class="card">
-                        <label class="form-label">Save this list as (optional)</label>
-                        <div class="flex-row" style="gap:8px;align-items:center;">
-                            <input id="list-name-input" class="form-input" style="flex:1;"
-                                placeholder="e.g. Week 3 spelling"
-                                value="${_activeListName || ''}"
-                                autocomplete="off" autocorrect="off">
-                            <button class="btn btn-secondary btn-small" onclick="Screens.saveCurrentList()">
-                                💾 Save
-                            </button>
-                        </div>
-                        <div id="save-list-msg" class="form-success hidden" style="margin-top:6px;"></div>
-                    </div>
-                ` : ''}
-                <div class="flex-row mt-12">
-                    <button class="btn btn-secondary" onclick="Screens.showHome()">← Back</button>
-                    <button class="btn btn-success" onclick="Screens.confirmList()">✓ Confirm List</button>
-                </div>
-            </div>
-        `;
-    }
-
-    function updateReviewWord(index, value) {
-        window._reviewWords[index] = value.trim().toLowerCase();
-    }
-
-    function deleteReviewWord(index) {
-        window._reviewWords.splice(index, 1);
-        renderReviewScreen();
-    }
-
-    function addReviewWord() {
-        window._reviewWords.push('');
-        renderReviewScreen();
-        setTimeout(() => {
-            const inputs = document.querySelectorAll('.word-item-input');
-            if (inputs.length > 0) inputs[inputs.length - 1].focus();
-        }, 50);
-    }
-
-    async function saveCurrentList() {
-        const nameInput = document.getElementById('list-name-input');
-        const msgEl     = document.getElementById('save-list-msg');
-        const name = nameInput?.value.trim();
-        if (!name) { nameInput?.focus(); return; }
-        const words = window._reviewWords.filter(w => w.trim().length > 0);
-        const result = await DB.saveList(name, words, _activeListId);
-        if (result.success) {
-            _activeListName = name;
-            if (msgEl) { msgEl.textContent = '✓ Saved!'; msgEl.classList.remove('hidden'); }
-            setTimeout(() => msgEl?.classList.add('hidden'), 2000);
-        }
-    }
-
-    function confirmList() {
-        const words = window._reviewWords.filter(w => w.trim().length > 0);
-        if (words.length === 0) { alert('Please add at least one word.'); return; }
-        window._reviewWords = words;
-        showStartScreen(words);
-    }
-
-    // ===== SAVED LISTS SCREEN =====
-
-    async function showSavedLists() {
-        navigate('saved-lists');
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card text-center">
-                    <p style="color:var(--text-light);">Loading lists…</p>
-                </div>
-            </div>
-        `;
-
-        if (!Auth.isSignedIn()) {
-            app.innerHTML = `
-                <div class="screen">
-                    ${renderHeader()}
-                    <div class="card text-center">
-                        <p style="font-size:32px;">📚</p>
-                        <p style="margin-top:8px;">Sign in to save and access your word lists.</p>
-                        <button class="btn btn-primary mt-12" onclick="Screens.showSignIn()">Sign In</button>
-                    </div>
-                    <button class="btn btn-secondary mt-12" onclick="Screens.showHome()">← Back</button>
-                </div>
-            `;
-            return;
-        }
-
-        const lists = await DB.getLists();
-
-        if (lists.length === 0) {
-            app.innerHTML = `
-                <div class="screen">
-                    ${renderHeader()}
-                    <div class="card text-center">
-                        <p style="font-size:32px;">📚</p>
-                        <h3 style="margin:8px 0;">No saved lists yet</h3>
-                        <p style="color:var(--text-light);font-size:13px;">
-                            Enter a word list and tap 💾 Save to keep it here.
-                        </p>
-                        <button class="btn btn-primary mt-12" onclick="Screens.showManualInput()">
-                            ✏️ Create a List
-                        </button>
-                    </div>
-                    <button class="btn btn-secondary mt-12" onclick="Screens.showHome()">← Back</button>
-                </div>
-            `;
-            return;
-        }
-
-        const listItems = lists.map(list => `
-            <div class="saved-list-item">
-                <div class="saved-list-info" onclick="Screens.loadSavedList('${list.id}')">
-                    <div class="saved-list-name">${_esc(list.name)}</div>
-                    <div class="saved-list-meta">
-                        ${list.words.length} words &nbsp;·&nbsp;
-                        ${_formatDate(list.updated_at)}
-                    </div>
-                </div>
-                <div class="saved-list-actions">
-                    <button class="btn btn-small btn-primary"
-                        onclick="Screens.loadSavedList('${list.id}')">▶ Start</button>
-                    <button class="btn btn-small btn-danger"
-                        onclick="Screens.deleteSavedList('${list.id}', this)">🗑</button>
-                </div>
-            </div>
-        `).join('');
-
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card">
-                    <h2 style="margin-bottom:12px;">📚 Saved Lists</h2>
-                    <div class="saved-lists">${listItems}</div>
-                </div>
-                <button class="btn btn-secondary mt-12" onclick="Screens.showHome()">← Back</button>
-            </div>
-        `;
-    }
-
-    async function loadSavedList(listId) {
-        const lists = await DB.getLists();
-        const list  = lists.find(l => l.id === listId);
-        if (!list) return;
-        _activeListId   = list.id;
-        _activeListName = list.name;
-        window._reviewWords = [...list.words];
-        renderReviewScreen();
-    }
-
-    async function deleteSavedList(listId, btn) {
-        if (!confirm('Delete this list?')) return;
-        btn.disabled = true;
-        await DB.deleteList(listId);
-        showSavedLists();
-    }
-
-    // ===== RESULTS HISTORY SCREEN =====
-
-    async function showResultsHistory() {
-        navigate('results-history');
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card text-center">
-                    <p style="color:var(--text-light);">Loading results…</p>
-                </div>
-            </div>
-        `;
-
-        if (!Auth.isSignedIn()) {
-            app.innerHTML = `
-                <div class="screen">
-                    ${renderHeader()}
-                    <div class="card text-center">
-                        <p style="font-size:32px;">📊</p>
-                        <p style="margin-top:8px;">Sign in to see your results history.</p>
-                        <button class="btn btn-primary mt-12" onclick="Screens.showSignIn()">Sign In</button>
-                    </div>
-                    <button class="btn btn-secondary mt-12" onclick="Screens.showHome()">← Back</button>
-                </div>
-            `;
-            return;
-        }
-
-        const results = await DB.getResults({ limit: 50 });
-
-        if (results.length === 0) {
-            app.innerHTML = `
-                <div class="screen">
-                    ${renderHeader()}
-                    <div class="card text-center">
-                        <p style="font-size:32px;">📊</p>
-                        <h3 style="margin:8px 0;">No results yet</h3>
-                        <p style="color:var(--text-light);font-size:13px;">
-                            Complete a spelling test to see your history here.
-                        </p>
-                        <button class="btn btn-primary mt-12" onclick="Screens.showHome()">Start Spelling</button>
-                    </div>
-                    <button class="btn btn-secondary mt-12" onclick="Screens.showHome()">← Back</button>
-                </div>
-            `;
-            return;
-        }
-
-        const rows = results.map(r => {
-            const pct = r.words_attempted > 0
-                ? Math.round((r.words_correct / r.words_attempted) * 100) : 0;
-            const medal = pct === 100 ? '🥇' : pct >= 80 ? '🥈' : pct >= 60 ? '🥉' : '📝';
-            return `
-                <div class="result-row">
-                    <div class="result-medal">${medal}</div>
-                    <div class="result-info">
-                        <div class="result-name">${_esc(r.list_name || 'Spelling Test')}</div>
-                        <div class="result-meta">${_formatDate(r.completed_at)}</div>
-                    </div>
-                    <div class="result-score">
-                        <span class="result-fraction">${r.words_correct}/${r.words_attempted}</span>
-                        <span class="result-pct">${pct}%</span>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card">
-                    <h2 style="margin-bottom:12px;">📊 Results History</h2>
-                    <div class="results-history">${rows}</div>
-                </div>
-                <button class="btn btn-secondary mt-12" onclick="Screens.showHome()">← Back</button>
-            </div>
-        `;
-    }
-
-    // ===== START SCREEN =====
-
-    function showStartScreen(words) {
-        navigate('start');
-        app.innerHTML = `
-            <div class="screen" style="justify-content:center;align-items:center;">
-                ${renderHeader()}
-                <div class="card text-center" style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;">
-                    <div style="font-size:48px;margin-bottom:16px;">📝</div>
-                    <h2 style="margin-bottom:8px;">${_activeListName ? _esc(_activeListName) : 'Ready to Spell!'}</h2>
-                    <p style="color:var(--text-light);margin-bottom:4px;">${words.length} words in your list</p>
-                    <p style="font-size:12px;color:var(--text-light);margin-bottom:24px;">
-                        Each word will be read twice. Listen carefully!
-                    </p>
-                    <div class="mode-toggle mb-16">
-                        <button class="${window._testMode !== 'paper' ? 'active' : ''}"
-                            onclick="window._testMode='keyboard';Screens.showStartScreen(window._reviewWords)">
-                            ⌨️ Keyboard
-                        </button>
-                        <button class="${window._testMode === 'paper' ? 'active' : ''}"
-                            onclick="window._testMode='paper';Screens.showStartScreen(window._reviewWords)">
-                            ✍️ Paper
-                        </button>
-                    </div>
-                    <button class="btn btn-primary" style="max-width:280px;"
-                        onclick="Screens.startTest(${JSON.stringify(words).replace(/"/g, '&quot;')})">
-                        ▶️ START SPELLING
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-
-    // ===== SPELLING TEST =====
-
-    function startTest(words) {
-        testState = {
-            words,
-            currentIndex: 0,
-            results: [],
-            mistakes: []
-        };
-        showTestWord();
-    }
-
-    function showTestWord() {
-        const { words, currentIndex } = testState;
-        const word    = words[currentIndex];
-        const total   = words.length;
-        const isPaper = window._testMode === 'paper';
-        Keyboard.reset();
-        app.innerHTML = `
-            <div class="screen" style="padding-bottom:0;">
-                <div class="test-header">
-                    <div class="test-progress">Word ${currentIndex + 1} / ${total}</div>
-                    <div class="test-title">SPELLING</div>
-                </div>
-                <div class="listen-area">
-                    <button class="listen-btn" onclick="Screens.listenWord()">🔊 Listen</button>
-                    <button class="listen-btn replay" onclick="Screens.replayWord()">🔊 Replay</button>
-                </div>
-                <div class="answer-display empty" id="answer-display">
-                    ${isPaper ? 'Write on paper, then take a photo' : 'Type your answer below'}
-                </div>
-                ${isPaper ? `
-                    <div class="text-center mt-12">
-                        <button class="btn btn-primary" style="max-width:280px;" onclick="Screens.paperCapture()">
-                            📸 Take Photo of Answer
-                        </button>
-                    </div>
-                ` : ''}
-                <div id="keyboard-container"></div>
-            </div>
-        `;
-
-        if (!isPaper) {
-            const kbContainer = document.getElementById('keyboard-container');
-            Keyboard.setCallbacks(
-                val => {
-                    const display = document.getElementById('answer-display');
-                    if (display) {
-                        display.textContent = val || '';
-                        display.className   = val ? 'answer-display' : 'answer-display empty';
-                        if (!val) display.textContent = 'Type your answer below';
-                    }
-                },
-                val => checkAnswer(val)
-            );
-            kbContainer.appendChild(Keyboard.render());
-        }
-        setTimeout(() => Voice.pronounceWord(word), 400);
-    }
-
-    function listenWord() { Voice.pronounceWord(testState.words[testState.currentIndex]); }
-    function replayWord() { Voice.speak(testState.words[testState.currentIndex]); }
-
-    // ===== PAPER MODE =====
-
-    async function paperCapture() {
-        const word = testState.words[testState.currentIndex];
-        try {
-            const imageData  = await Handwriting.captureAnswer();
-            const display    = document.getElementById('answer-display');
-            if (display) { display.textContent = 'Reading your handwriting…'; display.className = 'answer-display empty'; }
-            const recognized = await Handwriting.recognizeHandwriting(imageData, word);
-            showPaperConfirm(recognized, imageData);
-        } catch (err) {
-            console.error('Paper capture error:', err);
-            alert('Could not capture. Please try again.');
-        }
-    }
-
-    function showPaperConfirm(recognized, imageData) {
-        app.innerHTML = `
-            <div class="screen">
-                <div class="test-header">
-                    <div class="test-progress">Word ${testState.currentIndex + 1} / ${testState.words.length}</div>
-                    <div class="test-title">CHECK YOUR ANSWER</div>
-                </div>
-                <img src="${imageData}" class="camera-preview" alt="Your handwriting">
-                <div class="ocr-confirm">
-                    <p style="color:var(--text-light);margin-bottom:8px;">I read:</p>
-                    <div class="ocr-result" id="paper-result">${recognized || '(nothing detected)'}</div>
-                    <p style="font-size:13px;color:var(--text-light);margin-bottom:16px;">Is this what you wrote?</p>
-                    <div class="flex-row">
-                        <button class="btn btn-success" onclick="Screens.confirmPaperAnswer()">✓ Yes</button>
-                        <button class="btn btn-secondary" onclick="Screens.editPaperAnswer()">✏️ Edit</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        window._paperRecognized = recognized;
-    }
-
-    function confirmPaperAnswer() { checkAnswer(window._paperRecognized || ''); }
-
-    function editPaperAnswer() {
-        const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
-        modal.innerHTML = `
-            <div class="modal">
-                <h3>Correct your answer</h3>
-                <input type="text" id="paper-edit-input" value="${window._paperRecognized || ''}"
-                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-                <button class="btn btn-primary" onclick="Screens.submitPaperEdit()">✓ Confirm</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        setTimeout(() => document.getElementById('paper-edit-input')?.focus(), 100);
-    }
-
-    function submitPaperEdit() {
-        const input = document.getElementById('paper-edit-input');
-        const val   = input ? input.value.trim() : '';
-        document.querySelector('.modal-overlay')?.remove();
-        checkAnswer(val);
-    }
-
-    // ===== ANSWER CHECKING =====
-
-    function checkAnswer(userAnswer) {
-        const word    = testState.words[testState.currentIndex];
-        const correct = Checker.check(userAnswer, word);
-        testState.results.push({ word, userAnswer: userAnswer.trim().toLowerCase(), correct });
-        if (correct) {
-            const result = Progression.addXP(10);
-            Progression.addCoins(1);
-            showFeedback(true, word, userAnswer, result);
-        } else {
-            testState.mistakes.push(word);
-            showFeedback(false, word, userAnswer, null);
-        }
-    }
-
-    function showFeedback(correct, word, userAnswer, levelResult) {
-        app.innerHTML = `
-            <div class="screen" style="justify-content:center;">
-                <div class="feedback">
-                    <div class="feedback-icon">${correct ? '🎉' : '❌'}</div>
-                    <div class="feedback-title ${correct ? 'correct' : 'incorrect'}">
-                        ${correct ? 'Correct!' : 'Not quite'}
-                    </div>
-                    ${!correct ? `
-                        <div class="feedback-detail">You wrote:</div>
-                        <div class="feedback-word" style="color:var(--error);">${userAnswer || '(empty)'}</div>
-                        <div class="feedback-detail mt-8">Correct spelling:</div>
-                        <div class="feedback-word" style="color:var(--success);">${word}</div>
-                    ` : `<div class="feedback-xp">+10 ⭐ XP  •  +1 🪙</div>`}
-                </div>
-                <button class="btn btn-primary mt-24" onclick="Screens.nextWord()">
-                    ${testState.currentIndex < testState.words.length - 1 ? 'Next Word →' : 'See Results 🏆'}
-                </button>
-            </div>
-        `;
-        if (levelResult?.leveledUp) {
-            setTimeout(() => Animations.showLevelUp(levelResult.newLevel), 500);
-        }
-    }
-
-    function nextWord() {
-        testState.currentIndex++;
-        if (testState.currentIndex >= testState.words.length) {
-            showResults();
-        } else {
-            showTestWord();
-        }
-    }
-
-    // ===== RESULTS SCREEN =====
-
-    async function showResults() {
-        navigate('results');
-        const { results, mistakes, words } = testState;
-        const correctCount = results.filter(r => r.correct).length;
-        const total        = words.length;
-        const percentage   = Math.round((correctCount / total) * 100);
-        const xpEarned     = correctCount * 10;
-        const coinsEarned  = correctCount;
-
-        // Persist stats to localStorage
-        if (mistakes.length > 0) {
-            Store.update(data => {
-                const newMistakes = mistakes.filter(m => !data.mistakeHistory.includes(m));
-                data.mistakeHistory = [...data.mistakeHistory, ...newMistakes].slice(-50);
-            });
-        }
-        Store.update(data => {
-            data.totalWordsCorrect   += correctCount;
-            data.totalWordsAttempted += total;
-        });
-
-        // Persist result to Supabase (non-blocking)
-        if (Auth.isSignedIn()) {
-            DB.saveResult({
-                listId:          _activeListId,
-                listName:        _activeListName || 'Spelling Test',
-                wordsAttempted:  total,
-                wordsCorrect:    correctCount,
-                mistakes
-            }).catch(e => console.warn('Failed to save result:', e));
-        }
-
-        const mistakeItems = mistakes.map(m =>
-            `<div class="mistake-item">❌ ${m}</div>`
-        ).join('');
-
-        app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card">
-                    <div class="results-score">
-                        <div class="trophy">🏆</div>
-                        <div class="score">${correctCount} / ${total}</div>
-                        <div class="percentage">${percentage}%</div>
-                    </div>
-                    <div class="results-rewards">
-                        <div class="reward-item">
-                            <div class="value">+${xpEarned} ⭐</div>
-                            <div class="label">XP Earned</div>
-                        </div>
-                        <div class="reward-item">
-                            <div class="value">+${coinsEarned} 🪙</div>
-                            <div class="label">Coins Earned</div>
-                        </div>
-                    </div>
-                </div>
-                ${mistakes.length > 0 ? `
-                    <div class="card">
-                        <h3 style="margin-bottom:8px;">Practice these:</h3>
-                        <div class="mistakes-list">${mistakeItems}</div>
-                        <button class="btn btn-primary btn-small mt-12" onclick="Screens.practiceMistakes()">
-                            🔁 Practice Mistakes
-                        </button>
-                    </div>
-                ` : `
-                    <div class="card text-center">
-                        <p style="font-size:18px;">🌟 Perfect score!</p>
-                    </div>
-                `}
-                <div class="flex-row mt-12">
-                    <button class="btn btn-secondary" onclick="Screens.showHome()">🏠 Home</button>
-                    <button class="btn btn-secondary" onclick="Screens.showResultsHistory()">📊 History</button>
-                </div>
-            </div>
-        `;
-    }
-
-    function practiceMistakes() {
-        if (testState.mistakes.length === 0) return;
-        window._reviewWords = [...testState.mistakes];
-        showStartScreen(testState.mistakes);
-    }
-
-    // ===== HERO SHOP =====
+    // ── Hero shop ─────────────────────────────────────────────────────────────
 
     function showHeroShop() {
-        navigate('hero-shop');
         const heroes   = Heroes.getAll();
         const progress = Progression.getProgress();
-
-        const heroCards = heroes.map(hero => {
-            let statusHtml = '';
-            let actionHtml = '';
-            if (hero.selected) {
-                statusHtml = '<span class="hero-status equipped">✓ Equipped</span>';
-            } else if (hero.unlocked) {
-                statusHtml = '<span class="hero-status owned">Owned</span>';
-                actionHtml = `<button class="btn btn-small btn-primary mt-8"
-                    onclick="Screens.equipHero('${hero.id}')">⭐ Equip</button>`;
-            } else if (progress.coins >= hero.price) {
-                actionHtml = `<button class="btn btn-small btn-primary mt-8"
-                    onclick="Screens.buyHero('${hero.id}')">Buy ${hero.price} 🪙</button>`;
-            } else {
-                statusHtml = `<span class="hero-status">${hero.price} 🪙</span>`;
-            }
-            return `
-                <div class="hero-card ${hero.selected ? 'selected' : ''} ${!hero.unlocked ? 'locked' : ''}">
-                    <div class="hero-emoji">${hero.emoji}</div>
-                    <div class="hero-name">${hero.name}</div>
-                    ${statusHtml}
-                    ${actionHtml}
-                </div>
-            `;
-        }).join('');
-
         app.innerHTML = `
-            <div class="screen">
-                ${renderHeader()}
-                <div class="card">
-                    <h2 style="margin-bottom:4px;">🏪 Hero Shop</h2>
-                    <p style="font-size:13px;color:var(--text-light);">You have ${progress.coins} 🪙</p>
-                </div>
-                <div class="hero-grid">${heroCards}</div>
-                <button class="btn btn-secondary mt-12" onclick="Screens.showHome()">🏠 Home</button>
+        <div class="screen">
+            ${_header('Screens.showHome()')}
+            <div class="card mt-12">
+                <h2 class="card-title">🏪 Hero Shop</h2>
+                <p style="font-size:13px;color:var(--text-light);">
+                    You have ${progress.coins} 🪙
+                </p>
             </div>
-        `;
+            <div class="hero-grid">
+                ${heroes.map(h => {
+                    let status='', action='';
+                    if (h.selected) status='<span class="hero-status hero-equipped">✓ Equipped</span>';
+                    else if (h.unlocked) {
+                        status='<span class="hero-status hero-owned">Owned</span>';
+                        action=`<button class="btn btn-small btn-primary mt-8"
+                            onclick="Screens.equipHero('${h.id}')">⭐ Equip</button>`;
+                    } else if (progress.coins>=h.price) {
+                        action=`<button class="btn btn-small btn-primary mt-8"
+                            onclick="Screens.buyHero('${h.id}')">Buy ${h.price} 🪙</button>`;
+                    } else {
+                        status=`<span class="hero-status">${h.price} 🪙</span>`;
+                    }
+                    return `
+                    <div class="hero-card ${h.selected?'hero-selected':''} ${!h.unlocked?'hero-locked':''}">
+                        <div class="hero-emoji">${h.emoji}</div>
+                        <div class="hero-name">${h.name}</div>
+                        ${status}${action}
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`;
     }
 
-    function buyHero(heroId) {
-        const result = Heroes.buy(heroId);
-        if (result.success) {
-            Heroes.equip(heroId);
-            const hero = Heroes.getCatalog().find(h => h.id === heroId);
-            app.innerHTML = `
-                <div class="screen" style="justify-content:center;align-items:center;">
-                    <div class="feedback">
-                        <div class="feedback-icon" style="font-size:64px;">${hero.emoji}</div>
-                        <div class="feedback-title correct">🎉 ${hero.name} unlocked!</div>
-                        <p style="color:var(--text-light);margin-top:8px;">Equipped as your hero</p>
-                    </div>
-                    <button class="btn btn-primary mt-24" onclick="Screens.showHeroShop()">← Back to Shop</button>
-                    <button class="btn btn-secondary mt-8" onclick="Screens.showHome()">🏠 Home</button>
-                </div>
-            `;
-        } else {
-            alert(result.reason || 'Cannot buy this hero.');
-        }
+    function buyHero(id) {
+        const r = Heroes.buy(id);
+        if (r.success) { Heroes.equip(id); showHeroShop(); }
+        else alert(r.reason||'Cannot buy this hero.');
     }
 
-    function equipHero(heroId) {
-        Heroes.equip(heroId);
-        showHeroShop();
-    }
+    function equipHero(id) { Heroes.equip(id); showHeroShop(); }
 
-    // ===== UTILITIES =====
-
-    function _showFormError(el, msg) {
-        if (!el) return;
-        el.textContent = msg;
-        el.classList.remove('hidden');
-    }
-
-    function _esc(str) {
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
-    function _formatDate(iso) {
-        if (!iso) return '';
-        const d = new Date(iso);
-        return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-    }
-
-    // ===== PUBLIC API =====
+    // ── Public API ────────────────────────────────────────────────────────────
     return {
         init,
-        showHome,
-        showSignIn,
-        showSignUp,
-        submitSignIn,
-        submitSignUp,
-        showForgotPassword,
-        submitForgotPassword,
-        showProfile,
-        saveGeminiKey,
-        clearGeminiKey,
-        confirmSignOut,
-        showManualInput,
-        processManualInput,
-        showListInput,
-        captureList,
-        showMultiListPicker,
-        pickList,
-        pickAllLists,
-        showListReview,
-        updateReviewWord,
-        deleteReviewWord,
-        addReviewWord,
-        saveCurrentList,
-        confirmList,
-        showSavedLists,
-        loadSavedList,
-        deleteSavedList,
-        showResultsHistory,
-        showStartScreen,
-        startTest,
-        showTestWord,
-        listenWord,
-        replayWord,
-        paperCapture,
-        confirmPaperAnswer,
-        editPaperAnswer,
-        submitPaperEdit,
-        checkAnswer,
+        showSignIn, submitSignIn,
+        showSignUp, submitSignUp,
+        showForgotPassword, submitForgotPassword,
+        showHome, resumeTest,
+        startListDirect, editList,
+        archiveList, unarchiveList, deleteList,
+        showAddList,
+        showPhotoCapture, captureAndProcess,
+        pickOneList, saveAllAndGoHome,
+        showTypeWords, processTypeWords,
+        _showReviewScreen, _wordChange, _wordDel, _wordAdd,
+        confirmAndSave,
+        showStartScreen, startTest,
+        exitTest, pauseTest, abandonTest,
+        listenWord, replayWord,
+        paperCapture, confirmPaper, editPaper, submitPaperEdit,
         nextWord,
-        showResults,
-        practiceMistakes,
-        showHeroShop,
-        buyHero,
-        equipHero
+        showResults, practiceMistakes, practiceAgain,
+        showResultsHistory,
+        showProfile, saveGeminiKey, clearGeminiKey, confirmSignOut,
+        showHeroShop, buyHero, equipHero
     };
 })();
