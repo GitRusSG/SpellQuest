@@ -448,19 +448,85 @@ const Screens = (() => {
 
     async function captureList() {
         try {
-            const imageData = await OCR.captureImage();
+            const imageData  = await OCR.captureImage();
             const statusEl   = document.getElementById('ocr-status');
             const progressEl = document.getElementById('ocr-progress');
             if (statusEl) statusEl.style.display = 'block';
-            const words = await OCR.recognizeList(imageData, pct => {
+
+            const lists = await OCR.recognizeMultipleLists(imageData, pct => {
                 if (progressEl) progressEl.style.width = pct + '%';
             });
-            if (words.length === 0) { alert('No words found. Try again with a clearer photo.'); return; }
-            showListReview(words);
+
+            if (lists.length === 0) {
+                alert('No words found. Try again with a clearer photo.');
+                return;
+            }
+
+            if (lists.length === 1) {
+                // Single list — go straight to review
+                _activeListName = lists[0].name;
+                showListReview(lists[0].words);
+            } else {
+                // Multiple lists found — let user pick
+                showMultiListPicker(lists);
+            }
         } catch (err) {
             console.error('OCR error:', err);
             alert('Could not read the image. Please try again.');
         }
+    }
+
+    function showMultiListPicker(lists) {
+        navigate('multi-list-picker');
+
+        const cards = lists.map((list, i) => `
+            <div class="multi-list-card" onclick="Screens.pickList(${i})">
+                <div class="multi-list-header">
+                    <span class="multi-list-icon">📋</span>
+                    <span class="multi-list-name">${_esc(list.name)}</span>
+                </div>
+                <div class="multi-list-words">
+                    ${list.words.slice(0, 5).map(w => `<span class="word-chip">${w}</span>`).join('')}
+                    ${list.words.length > 5 ? `<span class="word-chip word-chip-more">+${list.words.length - 5} more</span>` : ''}
+                </div>
+                <div class="multi-list-count">${list.words.length} words</div>
+            </div>
+        `).join('');
+
+        app.innerHTML = `
+            <div class="screen">
+                ${renderHeader()}
+                <div class="card">
+                    <h2 style="margin-bottom:4px;">📸 Found ${lists.length} Lists</h2>
+                    <p style="font-size:13px;color:var(--text-light);margin-bottom:16px;">
+                        Tap a list to practise it, or start all lists together
+                    </p>
+                    <div class="multi-list-grid">${cards}</div>
+                </div>
+                <button class="btn btn-primary mt-8"
+                    onclick="Screens.pickAllLists()">
+                    ▶ Start All Lists Together
+                </button>
+                <button class="btn btn-secondary mt-8" onclick="Screens.showListInput()">← Retake Photo</button>
+            </div>
+        `;
+
+        // Stash lists for picker callbacks
+        window._ocrLists = lists;
+    }
+
+    function pickList(index) {
+        const list = window._ocrLists[index];
+        if (!list) return;
+        _activeListName = list.name;
+        showListReview(list.words);
+    }
+
+    function pickAllLists() {
+        const allWords = (window._ocrLists || []).flatMap(l => l.words);
+        const unique   = [...new Set(allWords)];
+        _activeListName = 'All Lists';
+        showListReview(unique);
     }
 
     // ===== LIST REVIEW =====
@@ -1140,6 +1206,9 @@ const Screens = (() => {
         processManualInput,
         showListInput,
         captureList,
+        showMultiListPicker,
+        pickList,
+        pickAllLists,
         showListReview,
         updateReviewWord,
         deleteReviewWord,
