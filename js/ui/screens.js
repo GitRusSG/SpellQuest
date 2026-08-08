@@ -476,61 +476,74 @@ const Screens = (() => {
 
     function _showMultiPicker(lists) {
         window._ocrLists = lists;
+        const cards = lists.map((l, i) => {
+            const sentCount = (l.sentences || []).length;
+            const edited = l._edited ? ' ✓' : '';
+            return `
+            <div class="multi-list-card" onclick="Screens.editOcrList(${i})">
+                <div class="multi-list-header">
+                    <span class="multi-list-icon">📋</span>
+                    <span class="multi-list-name">${_esc(l.name)}${edited}</span>
+                </div>
+                <div class="multi-list-words">
+                    ${l.words.slice(0, 5).map(w =>
+                        `<span class="word-chip">${_esc(w)}</span>`).join('')}
+                    ${l.words.length > 5
+                        ? `<span class="word-chip word-chip-more">+${l.words.length - 5}</span>`
+                        : ''}
+                </div>
+                <div class="multi-list-count">
+                    ${l.words.length} words${sentCount > 0 ? ` · ${sentCount} sentences` : ''}
+                </div>
+            </div>`;
+        }).join('');
+
         app.innerHTML = `
         <div class="screen">
             ${_header('Screens.showPhotoCapture()')}
             <h2 class="screen-title">Found ${lists.length} lists</h2>
-            <p class="screen-sub">Each will be saved separately</p>
-            <div class="multi-list-grid">
-                ${lists.map((l,i) => {
-                    const sentCount = (l.sentences || []).length;
-                    return `
-                    <div class="multi-list-card" onclick="Screens.pickOneList(${i})">
-                        <div class="multi-list-header">
-                            <span class="multi-list-icon">📋</span>
-                            <span class="multi-list-name">${_esc(l.name)}</span>
-                        </div>
-                        <div class="multi-list-words">
-                            ${l.words.slice(0,5).map(w =>
-                                `<span class="word-chip">${_esc(w)}</span>`).join('')}
-                            ${l.words.length>5
-                                ? `<span class="word-chip word-chip-more">+${l.words.length-5}</span>`
-                                : ''}
-                        </div>
-                        <div class="multi-list-count">
-                            ${l.words.length} words${sentCount > 0 ? ` · ${sentCount} sentences` : ''}
-                        </div>
-                    </div>`;
-                }).join('')}
-            </div>
+            <p class="screen-sub">Tap a list to review/edit, then save all when done</p>
+            <div class="multi-list-grid">${cards}</div>
             <button class="btn btn-primary mt-16"
                 onclick="Screens.saveAllAndGoHome()">
-                💾 Save All Lists &amp; Go to Practice
+                💾 Save All &amp; Done
             </button>
         </div>`;
     }
 
-    async function pickOneList(i) {
-        const lists = window._ocrLists || [];
-        if (!lists[i]) return;
-
-        // Save ALL lists first so none are lost
-        const btn = document.querySelector('.btn-primary');
-        if (btn) { btn.disabled = true; btn.textContent = 'Saving all…'; }
-
-        await DB.saveAllLists(lists);
-
-        // Now open the picked one for review/practice
-        const picked = lists[i];
-        const savedLists = await DB.getLists({ status: 'active' });
-        const saved = savedLists.find(l => l.name === picked.name);
-
-        _activeListId       = saved?.id || null;
-        _activeListName     = picked.name;
-        window._reviewWords     = [...picked.words];
-        window._reviewSentences = [...(picked.sentences || [])];
+    // Edit a single OCR list — then return to picker
+    function editOcrList(i) {
+        const list = window._ocrLists?.[i];
+        if (!list) return;
+        window._editingOcrIndex = i;
+        _activeListId   = null;
+        _activeListName = list.name;
+        window._reviewWords     = [...list.words];
+        window._reviewSentences = [...(list.sentences || [])];
         window._editTestDate    = '';
-        _showReviewScreen();
+        _showReviewScreen('ocr-edit'); // pass mode flag
+    }
+
+    // Called when saving from review in ocr-edit mode — updates the list in _ocrLists and returns to picker
+    function _saveOcrEditAndReturn() {
+        const i    = window._editingOcrIndex;
+        const name = document.getElementById('list-name')?.value.trim() || _activeListName;
+        const date = document.getElementById('test-date')?.value || null;
+        const words = window._reviewWords.filter(w => w.trim().length > 0);
+        const sents = (window._reviewSentences || []).filter(s => s.trim().length > 0);
+
+        if (window._ocrLists && window._ocrLists[i]) {
+            window._ocrLists[i].name      = name;
+            window._ocrLists[i].words     = words;
+            window._ocrLists[i].sentences = sents;
+            window._ocrLists[i].testDate  = date;
+            window._ocrLists[i]._edited   = true;
+        }
+        _showMultiPicker(window._ocrLists);
+    }
+
+    function _backToMultiPicker() {
+        _showMultiPicker(window._ocrLists || []);
     }
 
     async function saveAllAndGoHome() {
@@ -592,10 +605,13 @@ const Screens = (() => {
 
     // ── Review screen ─────────────────────────────────────────────────────────
 
-    function _showReviewScreen() {
+    function _showReviewScreen(mode) {
+        // mode: undefined = normal (save & start), 'ocr-edit' = save & back to picker
         const words     = window._reviewWords;
         const sentences = window._reviewSentences || [];
         const isNew     = !_activeListId;
+        const isOcrEdit = mode === 'ocr-edit';
+        window._reviewMode = mode;
         const items = words.map((w,i) => `
             <div class="word-item">
                 <span class="word-item-num">${i+1}.</span>
@@ -620,7 +636,9 @@ const Screens = (() => {
 
         app.innerHTML = `
         <div class="screen">
-            ${_header(isNew ? 'Screens.showAddList()' : 'Screens.showHome(\'manage\')')}
+            ${_header(isOcrEdit
+                ? 'Screens._backToMultiPicker()'
+                : isNew ? 'Screens.showAddList()' : 'Screens.showHome(\'manage\')')}
             <div class="card mt-12">
                 <label class="form-label">List name *</label>
                 <input id="list-name" class="form-input"
@@ -657,7 +675,11 @@ const Screens = (() => {
             </div>` : ''}
             <button class="btn btn-primary btn-full mt-12"
                 onclick="Screens.confirmAndSave()">
-                ${isNew ? '💾 Save &amp; Start Spelling' : '✓ Save Changes &amp; Start Spelling'}
+                ${isOcrEdit
+                    ? '✓ Save &amp; Back to List'
+                    : isNew
+                        ? '💾 Save &amp; Start Spelling'
+                        : '✓ Save Changes &amp; Start Spelling'}
             </button>
         </div>`;
     }
@@ -714,10 +736,13 @@ const Screens = (() => {
                     if (action === 'update') {
                         _activeListId = dup.id;
                     } else if (action === 'skip') {
-                        // Use existing list for practice without saving
                         _activeListId   = dup.id;
                         _activeListName = dup.name;
-                        showStartScreen(words);
+                        if (window._reviewMode === 'ocr-edit') {
+                            _saveOcrEditAndReturn();
+                        } else {
+                            showStartScreen(words, window._reviewSentences || []);
+                        }
                         return;
                     } else {
                         return; // cancelled
@@ -731,7 +756,13 @@ const Screens = (() => {
                 _activeListId = result.id;
             }
         }
-        showStartScreen(words);
+
+        // Route based on mode
+        if (window._reviewMode === 'ocr-edit') {
+            _saveOcrEditAndReturn();
+        } else {
+            showStartScreen(words, window._reviewSentences || []);
+        }
     }
 
     // Shows a modal asking what to do with a duplicate list name.
@@ -1569,7 +1600,7 @@ const Screens = (() => {
         archiveList, unarchiveList, deleteList,
         showAddList,
         showPhotoCapture, captureAndProcess,
-        pickOneList, saveAllAndGoHome,
+        editOcrList, saveAllAndGoHome, _backToMultiPicker,
         showTypeWords, processTypeWords,
         _showReviewScreen, _wordChange, _wordDel, _wordAdd,
         _sentChange, _sentDel, _sentAdd,
