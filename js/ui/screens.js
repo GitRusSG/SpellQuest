@@ -482,21 +482,26 @@ const Screens = (() => {
             <h2 class="screen-title">Found ${lists.length} lists</h2>
             <p class="screen-sub">Each will be saved separately</p>
             <div class="multi-list-grid">
-                ${lists.map((l,i) => `
-                <div class="multi-list-card" onclick="Screens.pickOneList(${i})">
-                    <div class="multi-list-header">
-                        <span class="multi-list-icon">📋</span>
-                        <span class="multi-list-name">${_esc(l.name)}</span>
-                    </div>
-                    <div class="multi-list-words">
-                        ${l.words.slice(0,5).map(w =>
-                            `<span class="word-chip">${_esc(w)}</span>`).join('')}
-                        ${l.words.length>5
-                            ? `<span class="word-chip word-chip-more">+${l.words.length-5}</span>`
-                            : ''}
-                    </div>
-                    <div class="multi-list-count">${l.words.length} words</div>
-                </div>`).join('')}
+                ${lists.map((l,i) => {
+                    const sentCount = (l.sentences || []).length;
+                    return `
+                    <div class="multi-list-card" onclick="Screens.pickOneList(${i})">
+                        <div class="multi-list-header">
+                            <span class="multi-list-icon">📋</span>
+                            <span class="multi-list-name">${_esc(l.name)}</span>
+                        </div>
+                        <div class="multi-list-words">
+                            ${l.words.slice(0,5).map(w =>
+                                `<span class="word-chip">${_esc(w)}</span>`).join('')}
+                            ${l.words.length>5
+                                ? `<span class="word-chip word-chip-more">+${l.words.length-5}</span>`
+                                : ''}
+                        </div>
+                        <div class="multi-list-count">
+                            ${l.words.length} words${sentCount > 0 ? ` · ${sentCount} sentences` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
             </div>
             <button class="btn btn-primary mt-16"
                 onclick="Screens.saveAllAndGoHome()">
@@ -505,14 +510,26 @@ const Screens = (() => {
         </div>`;
     }
 
-    function pickOneList(i) {
-        const list = window._ocrLists?.[i];
-        if (!list) return;
-        _activeListId   = null;
-        _activeListName = list.name;
-        window._reviewWords     = [...list.words];
-        window._reviewSentences = [...(list.sentences || [])];
-        window._editTestDate = '';
+    async function pickOneList(i) {
+        const lists = window._ocrLists || [];
+        if (!lists[i]) return;
+
+        // Save ALL lists first so none are lost
+        const btn = document.querySelector('.btn-primary');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving all…'; }
+
+        await DB.saveAllLists(lists);
+
+        // Now open the picked one for review/practice
+        const picked = lists[i];
+        const savedLists = await DB.getLists({ status: 'active' });
+        const saved = savedLists.find(l => l.name === picked.name);
+
+        _activeListId       = saved?.id || null;
+        _activeListName     = picked.name;
+        window._reviewWords     = [...picked.words];
+        window._reviewSentences = [...(picked.sentences || [])];
+        window._editTestDate    = '';
         _showReviewScreen();
     }
 
