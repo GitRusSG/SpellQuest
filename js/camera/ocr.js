@@ -10,11 +10,15 @@ const OCR = (() => {
     }
 
     // ── Image capture ─────────────────────────────────────────────────────────
-    function captureImage() {
+    // source: 'camera' = open camera directly, 'gallery' = open file picker
+    function captureImage(source) {
         return new Promise((resolve, reject) => {
             const input = document.createElement('input');
             input.type    = 'file';
             input.accept  = 'image/*';
+            if (source === 'camera') {
+                input.capture = 'environment';
+            }
 
             input.onchange = e => {
                 const file = e.target.files[0];
