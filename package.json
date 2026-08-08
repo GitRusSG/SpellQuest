@@ -1,0 +1,9 @@
+{
+  "name": "spellquest",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "npx serve . -l 8080",
+    "dev": "npx serve . -l 8080"
+  }
+}

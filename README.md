@@ -1,71 +1,89 @@
 # SpellQuest 🤖
 
-A mobile-first, browser-based spelling practice app for children. SpellQuest reads words aloud and asks kids to spell them — earning XP, leveling up, and unlocking hero characters along the way.
-
-No installation, no account, no backend. It runs entirely in the browser and works offline after the first load.
+A mobile-first spelling practice app for children. Kids receive spelling lists from their teachers, add them to the app (by photo or typing), and practice daily until their school test.
 
 ---
 
 ## Features
 
-- **Word list input** — type a list manually or photograph a printed spelling sheet (OCR)
-- **Audio pronunciation** — words are spoken aloud twice using the Web Speech API, mimicking a classroom spelling test
-- **Two answer modes** — type using a custom on-screen keyboard, or write on paper and photograph the answer
-- **XP & leveling system** — earn 10 XP per correct answer; level up as XP accumulates
-- **Coin rewards** — earn 1 coin per correct answer; spend coins to unlock hero characters
-- **Hero shop** — 7 free heroes + 5 premium-exclusive heroes, all represented as emoji
-- **Mistake tracking** — incorrect words are saved and can be re-practiced immediately
-- **Premium tier** — optional paid plans that remove ads and unlock extra heroes/voices
-- **No system keyboard** — a custom QWERTY keyboard avoids OS autocorrect cheating the test
+- **Photo OCR** — photograph a printed spelling sheet; AI (Gemini) extracts words and list names automatically. Multiple lists on one page are split and saved separately.
+- **Manual entry** — type words one per line as an alternative
+- **Persistent lists** — lists are saved to the cloud; practice the same list daily across multiple sessions
+- **Duplicate detection** — re-scanning the same sheet won't create duplicates
+- **Practice / Manage tabs** — daily practice is front-and-centre; list management (add, edit, archive, delete) is a separate tab
+- **Test date** — optional school test date per list; countdown shown on practice cards
+- **Archive** — hide lists after the school test is done
+- **Pause & resume** — exit mid-test and resume later from where you left off
+- **Audio pronunciation** — words spoken aloud twice using the Web Speech API
+- **Two answer modes** — custom on-screen keyboard (prevents autocorrect) or handwriting on paper + photo
+- **XP & leveling** — 10 XP per correct answer, leveling curve
+- **Coins & hero shop** — 1 coin per correct answer, spend on cosmetic heroes
+- **Results history** — every test score saved, viewable over time
+- **Profile & stats** — accuracy rate, total tests, most missed words
+- **Accounts** — email/password sign up per child; all data synced via Supabase
 
 ---
 
 ## Tech Stack
 
-| Concern | Technology |
+| Layer | Technology |
 |---|---|
-| Language | Vanilla JavaScript (ES6+, IIFE modules) |
-| Markup / Styles | HTML5, CSS3 (mobile-first, single file) |
-| Text-to-speech | Web Speech API (`SpeechSynthesis`) |
-| OCR (photo input) | [Tesseract.js v5](https://github.com/naptha/tesseract.js) (CDN) |
-| Persistence | `localStorage` (single JSON blob) |
-| Deployment | GitHub Pages via GitHub Actions |
-| Build tooling | None — static files served directly |
+| Frontend | Vanilla JavaScript (ES6+, IIFE modules), HTML5, CSS3 |
+| Backend / Auth / DB | [Supabase](https://supabase.com) (Postgres + Auth + Edge Functions) |
+| OCR | Supabase Edge Function → Gemini Flash Lite (server-side key) |
+| OCR fallback | Tesseract.js v5 (CDN, runs in browser) |
+| TTS | Web Speech API (`SpeechSynthesis`) |
+| Offline cache | `localStorage` (syncs with Supabase on sign-in) |
+| Hosting | GitHub Pages |
+| CI/CD | GitHub Actions (deploy on push to main) |
 
 ---
 
 ## Getting Started
 
-### Running locally
+### Prerequisites
 
-Because the app uses ES modules and the camera/file APIs, it must be served over HTTP (not opened as a `file://` URL).
+- A [Supabase](https://supabase.com) project
+- A [Gemini API key](https://aistudio.google.com/apikey) (free tier)
+- Node.js (for local dev server)
 
-Any static file server works:
+### 1. Apply the database schema
+
+In your Supabase dashboard → **SQL Editor**, run:
+- `supabase/schema.sql` — creates tables, RLS policies, triggers
+- `supabase/migration_001_list_status.sql` — adds status and test_date columns
+
+### 2. Deploy the Edge Function
 
 ```bash
-# Python 3
-python3 -m http.server 8080
-
-# Node.js (npx)
-npx serve .
-
-# VS Code / Kiro
-Use the "Live Server" extension or equivalent
+npx supabase functions deploy ocr --project-ref <your-project-ref> --no-verify-jwt
+npx supabase secrets set GEMINI_KEY="<your-gemini-key>" --project-ref <your-project-ref>
 ```
 
-Then open `http://localhost:8080` in your browser.
+The function verifies authentication internally (checks JWT against Supabase Auth).
 
-### Deploying to GitHub Pages
+### 3. Configure the frontend
 
-The repo includes a GitHub Actions workflow that deploys automatically on every push to `main`:
+Edit `js/supabase/client.js` and set your project URL and publishable key:
 
+```js
+const SUPABASE_URL = 'https://<ref>.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_...';
 ```
-.github/workflows/deploy-pages.yml
+
+### 4. Run locally
+
+```bash
+npm start
 ```
 
-No build step is needed. All source files are served as-is.
+Opens at `http://localhost:8080`.
 
-To deploy manually: go to **Settings → Pages** in your GitHub repo and set the source to the `gh-pages` branch (or configure GitHub Actions as above).
+### 5. Deploy to GitHub Pages
+
+Push to `main` — the GitHub Actions workflow deploys automatically.
+
+After deploying, add your Pages URL to Supabase under **Authentication → URL Configuration → Site URL and Redirect URLs**.
 
 ---
 
@@ -73,84 +91,81 @@ To deploy manually: go to **Settings → Pages** in your GitHub repo and set the
 
 ```
 SpellQuest/
-├── index.html                  # Single entry point — loads all scripts
+├── index.html                       # Entry point, loads all scripts
+├── package.json                     # npm start script
 ├── css/
-│   └── styles.css              # All styles (~600 lines, mobile-first)
+│   └── styles.css                   # All styles (single clean file)
 ├── js/
-│   ├── app.js                  # App bootstrap (async IIFE)
+│   ├── app.js                       # Bootstrap — auth init, routing
+│   ├── supabase/
+│   │   ├── client.js                # Supabase client singleton
+│   │   ├── auth.js                  # Sign up/in/out, password reset
+│   │   └── db.js                    # Profiles, word lists, test results CRUD
 │   ├── storage/
-│   │   └── store.js            # localStorage wrapper
+│   │   └── store.js                 # localStorage cache + Supabase sync
 │   ├── game/
-│   │   ├── heroes.js           # Hero catalog + buy/equip logic
-│   │   └── progression.js      # XP, leveling, coins
+│   │   ├── heroes.js                # Hero catalog + buy/equip
+│   │   ├── progression.js           # XP, leveling, coins
+│   │   └── testpause.js             # Pause/resume test state
 │   ├── speech/
-│   │   └── voice.js            # TTS voice selection and pronunciation
+│   │   └── voice.js                 # TTS pronunciation
 │   ├── spelling/
-│   │   └── checker.js          # Answer comparison and diff highlighting
+│   │   └── checker.js               # Answer comparison
 │   ├── camera/
-│   │   ├── ocr.js              # Printed word list → word array (Tesseract)
-│   │   └── handwriting.js      # Handwritten answer → text (Tesseract)
-│   ├── monetization/
-│   │   ├── ads.js              # AdSense integration + rewarded ads
-│   │   └── premium.js          # Premium plans and purchase simulation
+│   │   ├── ocr.js                   # Edge Function client + Tesseract fallback
+│   │   └── handwriting.js           # Handwritten answer recognition
 │   └── ui/
-│       ├── screens.js          # All screen rendering and game flow
-│       ├── keyboard.js         # Custom QWERTY keyboard widget
-│       └── animations.js       # Level-up overlay and coin float effects
+│       ├── screens.js               # All screens and navigation
+│       ├── keyboard.js              # Custom QWERTY keyboard
+│       └── animations.js            # Level-up overlay
+├── supabase/
+│   ├── schema.sql                   # Full database schema
+│   ├── migration_001_list_status.sql # Migration for existing DBs
+│   └── functions/
+│       └── ocr/
+│           └── index.ts             # Edge Function: Gemini OCR proxy
 └── .github/
     └── workflows/
-        └── deploy-pages.yml    # GitHub Pages CI/CD
+        └── deploy-pages.yml         # GitHub Pages deployment
 ```
+
+---
+
+## Security
+
+| Layer | Protection |
+|---|---|
+| Database | Row Level Security — users only access their own data |
+| Edge Function | Verifies user JWT against Supabase Auth; 401 if unauthenticated |
+| Gemini API key | Stored as Supabase secret; never exposed to clients |
+| Publishable key | Safe to be public — identifies project only, can't bypass RLS |
 
 ---
 
 ## How to Use
 
-1. **Open the app** — the home screen shows your hero, XP, level, and coins.
-2. **Enter a word list** — tap "Type Spelling List" to enter words manually, or "Photo Spelling List" to photograph a printed sheet.
-3. **Review the list** — edit or delete words before starting.
-4. **Choose input mode** — Keyboard (type answers) or Paper (photograph handwritten answers).
-5. **Start spelling** — the app reads each word aloud twice. Type or photograph your answer, then tap the check button.
-6. **See results** — review your score, XP earned, and any mistakes. Practice missed words again with one tap.
+1. **Sign up** — parent creates an account with their email + a display name for the child
+2. **Add lists** — Manage tab → Add New → photo or type. Lists auto-save on confirm.
+3. **Practice daily** — Practice tab shows active lists. Tap one to start.
+4. **Pause/resume** — tap ✕ during a test → Pause & Resume Later
+5. **Archive** — after the school test, archive the list from Manage tab
+6. **View progress** — Profile screen shows stats; results history shows all past scores
 
 ---
 
 ## Configuration
 
-There is no configuration file. A few values worth knowing if you're modifying the code:
-
-| Location | Value | Purpose |
+| File | Value | Purpose |
 |---|---|---|
-| `js/game/progression.js` | `10` XP per correct word | Base XP reward |
-| `js/game/progression.js` | `level × 10` XP per level | Level-up threshold formula |
-| `js/game/progression.js` | `1` coin per correct word | Coin reward |
-| `js/speech/voice.js` | `rate: 0.85` | Speech rate (slower for clarity) |
-| `js/speech/voice.js` | `2500ms` pause between readings | Gap between double pronunciation |
-| `js/monetization/ads.js` | `INTERSTITIAL_FREQUENCY: 2` | Show interstitial every N tests |
-| `js/monetization/premium.js` | `$2.99 / $19.99 / $39.99` | Monthly / Yearly / Lifetime pricing |
-
----
-
-## Monetization Setup
-
-The app has AdSense and premium purchase stubs ready for production wiring:
-
-- **Ads**: Replace the placeholder publisher ID and slot IDs in `js/monetization/ads.js`, and set `testMode: false`.
-- **Premium**: Replace `Premium.purchase()` in `js/monetization/premium.js` with a real payment provider (Stripe, PayPal, or platform in-app purchase).
+| `js/supabase/client.js` | `SUPABASE_URL` | Project URL |
+| `js/supabase/client.js` | `SUPABASE_KEY` | Publishable key |
+| Supabase secret | `GEMINI_KEY` | Gemini API key (server-side) |
 
 ---
 
 ## Browser Support
 
-Requires a modern browser with:
-- `SpeechSynthesis` API (Chrome, Safari, Edge, Firefox)
-- `localStorage`
-- `<input type="file" capture="environment">` for camera features (mobile browsers)
-
-Tesseract.js (OCR) requires WebAssembly support, which all modern browsers provide.
-
----
-
-## License
-
-See `LICENSE` if present, or contact the project owner.
+- Chrome, Safari, Edge, Firefox (modern versions)
+- `SpeechSynthesis` API for pronunciation
+- WebAssembly for Tesseract.js fallback
+- `<input type="file" capture="environment">` for camera (mobile)
