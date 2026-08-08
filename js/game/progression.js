@@ -10,6 +10,7 @@ const Progression = (() => {
     function addXP(amount) {
         let leveledUp = false;
         let newLevel = 0;
+        let bonusCoins = 0;
 
         Store.update(data => {
             data.xp += amount;
@@ -21,11 +22,15 @@ const Progression = (() => {
                 data.level++;
                 leveledUp = true;
                 newLevel = data.level;
+                // Bonus coins on level up: level × 5
+                const reward = data.level * 5;
+                data.coins += reward;
+                bonusCoins += reward;
                 required = xpForNextLevel(data.level);
             }
         });
 
-        return { leveledUp, newLevel };
+        return { leveledUp, newLevel, bonusCoins };
     }
 
     function addCoins(amount) {

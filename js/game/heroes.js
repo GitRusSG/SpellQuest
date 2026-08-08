@@ -11,10 +11,23 @@ const Heroes = (() => {
         { id: 'golden_dragon', emoji: '👑', name: 'Golden Dragon', price: 100 }
     ];
 
+    // Discount: 2% per level, capped at 50%
+    function _discount() {
+        const data = Store.load();
+        return Math.min(data.level * 2, 50) / 100;
+    }
+
+    function _discountedPrice(basePrice) {
+        if (basePrice === 0) return 0;
+        return Math.max(1, Math.round(basePrice * (1 - _discount())));
+    }
+
     function getAll() {
         const data = Store.load();
         return catalog.map(hero => ({
             ...hero,
+            basePrice: hero.price,
+            price: _discountedPrice(hero.price),
             unlocked: data.unlockedHeroes.includes(hero.id),
             selected: data.selectedHero === hero.id
         }));
@@ -34,12 +47,14 @@ const Heroes = (() => {
         if (data.unlockedHeroes.includes(heroId)) {
             return { success: false, reason: 'Already owned' };
         }
-        if (data.coins < hero.price) {
+
+        const price = _discountedPrice(hero.price);
+        if (data.coins < price) {
             return { success: false, reason: 'Not enough coins' };
         }
 
         Store.update(d => {
-            d.coins -= hero.price;
+            d.coins -= price;
             d.unlockedHeroes.push(heroId);
         });
 

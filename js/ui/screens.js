@@ -962,7 +962,7 @@ const Screens = (() => {
                     ? 'Next Word →' : 'See Results 🏆'}
             </button>
         </div>`;
-        if (lvl?.leveledUp) setTimeout(() => Animations.showLevelUp(lvl.newLevel), 500);
+        if (lvl?.leveledUp) setTimeout(() => Animations.showLevelUp(lvl.newLevel, lvl.bonusCoins), 500);
     }
 
     function nextWord() {
@@ -1185,6 +1185,7 @@ const Screens = (() => {
     function showHeroShop() {
         const heroes   = Heroes.getAll();
         const progress = Progression.getProgress();
+        const discount = Math.min(progress.level * 2, 50);
         app.innerHTML = `
         <div class="screen">
             ${_header('Screens.showHome()')}
@@ -1192,6 +1193,7 @@ const Screens = (() => {
                 <h2 class="card-title">🏪 Hero Shop</h2>
                 <p style="font-size:13px;color:var(--text-light);">
                     You have ${progress.coins} 🪙
+                    ${discount > 0 ? ` &nbsp;·&nbsp; <span style="color:var(--success);font-weight:700;">${discount}% off</span> (Level ${progress.level} discount)` : ''}
                 </p>
             </div>
             <div class="hero-grid">
@@ -1203,10 +1205,16 @@ const Screens = (() => {
                         action=`<button class="btn btn-small btn-primary mt-8"
                             onclick="Screens.equipHero('${h.id}')">⭐ Equip</button>`;
                     } else if (progress.coins>=h.price) {
+                        const priceTag = h.basePrice !== h.price
+                            ? `<s style="opacity:0.5;">${h.basePrice}</s> ${h.price} 🪙`
+                            : `${h.price} 🪙`;
                         action=`<button class="btn btn-small btn-primary mt-8"
-                            onclick="Screens.buyHero('${h.id}')">Buy ${h.price} 🪙</button>`;
+                            onclick="Screens.buyHero('${h.id}')">Buy ${priceTag}</button>`;
                     } else {
-                        status=`<span class="hero-status">${h.price} 🪙</span>`;
+                        const priceTag = h.basePrice !== h.price
+                            ? `<s style="opacity:0.5;">${h.basePrice}</s> ${h.price} 🪙`
+                            : `${h.price} 🪙`;
+                        status=`<span class="hero-status">${priceTag}</span>`;
                     }
                     return `
                     <div class="hero-card ${h.selected?'hero-selected':''} ${!h.unlocked?'hero-locked':''}">

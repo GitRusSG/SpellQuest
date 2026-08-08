@@ -2,7 +2,7 @@
 
 const Animations = (() => {
 
-    function showLevelUp(level) {
+    function showLevelUp(level, bonusCoins) {
         const hero = Heroes.getSelected();
         const overlay = document.createElement('div');
         overlay.className = 'level-up-overlay';
@@ -12,6 +12,7 @@ const Animations = (() => {
                 <div class="level-up-hero">${hero.emoji}</div>
                 <div class="level-up-text">🎉 LEVEL UP!</div>
                 <div class="level-up-sparkle" style="margin-top:8px;">Level ${level}</div>
+                ${bonusCoins ? `<div class="level-up-coins">+${bonusCoins} 🪙 bonus!</div>` : ''}
             </div>
         `;
 

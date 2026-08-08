@@ -1145,3 +1145,11 @@ input[type="date"].form-input { height: 52px; }
 
 /* ── Flex-row button fix ── */
 .flex-row > .btn { width: auto; flex: 1; }
+
+/* Level-up bonus coins */
+.level-up-coins {
+    font-size: 20px;
+    font-weight: 700;
+    color: #FFD700;
+    margin-top: 8px;
+}
