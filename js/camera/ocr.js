@@ -15,7 +15,6 @@ const OCR = (() => {
             const input = document.createElement('input');
             input.type    = 'file';
             input.accept  = 'image/*';
-            input.capture = 'environment';
 
             input.onchange = e => {
                 const file = e.target.files[0];
