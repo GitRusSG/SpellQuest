@@ -849,7 +849,8 @@ const Screens = (() => {
             currentIndex: 0,
             phase: 'words',  // 'words' | 'sentences'
             results: [],     // { item, userAnswer, correct, type:'word'|'sentence' }
-            mistakes: []
+            mistakes: [],
+            skipped: []
         };
         if (window._testMode === 'paper') {
             _showPaperDictation();
@@ -1113,6 +1114,7 @@ const Screens = (() => {
             <div class="answer-display" id="answer-display">
                 ${isSentence ? 'Type the full sentence below' : 'Type your answer below'}
             </div>
+            <button class="btn-text skip-btn" onclick="Screens.skipWord()">Skip ⏭</button>
             <div id="keyboard-container"></div>
         </div>`;
 
@@ -1260,6 +1262,25 @@ const Screens = (() => {
         _showFeedback(correct, item, userAnswer, lvl);
     }
 
+    function skipWord() {
+        const item = _getCurrentItem();
+        testState.skipped.push(item);
+        testState.currentIndex++;
+        const items = testState.phase === 'words' ? testState.words : testState.sentences;
+
+        if (testState.currentIndex >= items.length) {
+            if (testState.phase === 'words' && testState.sentences.length > 0) {
+                testState.phase = 'sentences';
+                testState.currentIndex = 0;
+                _showTestWord();
+            } else {
+                showResults();
+            }
+        } else {
+            _showTestWord();
+        }
+    }
+
     function _showFeedback(correct, item, userAnswer, lvl) {
         const totalAll = testState.words.length + testState.sentences.length;
         const globalIdx = testState.phase === 'words'
@@ -1378,6 +1399,18 @@ const Screens = (() => {
                 <p style="font-size:22px;">🌟 Perfect score!</p>
             </div>`}
 
+            ${testState.skipped.length > 0 ? `
+            <div class="card skipped-card">
+                <h3 class="card-title">⏭ Unfinished — ${_pct(testState.skipped.length, testState.words.length + testState.sentences.length)}% skipped</h3>
+                <div class="mistakes-list">
+                    ${testState.skipped.map(s=>`<div class="skipped-item">⏭ ${_esc(s)}</div>`).join('')}
+                </div>
+                <button class="btn btn-primary btn-full mt-12"
+                    onclick="Screens.practiceSkipped()">
+                    ▶ Go to Unfinished
+                </button>
+            </div>` : ''}
+
             <div class="results-actions">
                 <button class="btn btn-primary" onclick="Screens.practiceAgain()">
                     ▶ Practice Again
@@ -1399,6 +1432,17 @@ const Screens = (() => {
         window._reviewWords    = mistakeWords;
         window._reviewSentences = mistakeSents;
         showStartScreen(mistakeWords, mistakeSents);
+    }
+
+    function practiceSkipped() {
+        if (!testState.skipped.length) return;
+        const skippedWords = testState.skipped.filter(s => testState.words.includes(s));
+        const skippedSents = testState.skipped.filter(s => testState.sentences.includes(s));
+        window._startWords     = skippedWords;
+        window._startSentences = skippedSents;
+        window._reviewWords    = skippedWords;
+        window._reviewSentences = skippedSents;
+        showStartScreen(skippedWords, skippedSents);
     }
 
     function practiceAgain() {
@@ -1615,11 +1659,11 @@ const Screens = (() => {
         confirmAndSave,
         showStartScreen, startTest,
         exitTest, pauseTest, abandonTest,
-        listenWord, stopSpeech,
+        listenWord, stopSpeech, skipWord,
         paperNextWord, submitPaperPhoto,
         paperCapture, confirmPaper, editPaper, submitPaperEdit,
         nextWord,
-        showResults, practiceMistakes, practiceAgain,
+        showResults, practiceMistakes, practiceSkipped, practiceAgain,
         showResultsHistory,
         showProfile, confirmSignOut,
         showHeroShop, buyHero, equipHero
