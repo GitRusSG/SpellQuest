@@ -19,6 +19,9 @@ const SupabaseClient = (() => {
                 detectSessionInUrl: true
             }
         });
+        // Expose URL and key for Edge Function calls
+        _client.supabaseUrl = SUPABASE_URL;
+        _client.supabaseKey = SUPABASE_KEY;
         return _client;
     }
 

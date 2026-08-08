@@ -1,47 +1,12 @@
 /* ===== SpellQuest OCR Module ===== */
-/* Uses Gemini Flash (multimodal LLM) as primary OCR engine.
-   Falls back to Tesseract.js if Gemini is unavailable or fails.
+/* Uses Supabase Edge Function (proxies Gemini) as primary OCR engine.
+   Falls back to Tesseract.js if the Edge Function is unavailable.
    Supports extracting multiple named spelling lists from a single image. */
 
 const OCR = (() => {
-    const GEMINI_MODEL = 'gemini-flash-lite-latest';
-    const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-
-    const GEMINI_PROMPT = `You are processing a school spelling list sheet.
-
-The image may contain ONE or MULTIPLE spelling lists on the same page.
-
-For EACH spelling list you find:
-1. Extract its name/title (e.g. "Spelling & Dictation 1 - Vocabulary for Writing")
-2. Extract ONLY the numbered spelling words — ignore dictation sentences, teacher instructions, and handwritten notes
-3. Words appear in a numbered table — extract them in order
-
-Return ONLY a JSON array, no markdown, no explanation:
-[
-  {
-    "name": "list name here",
-    "words": ["word1", "word2", "word3"]
-  }
-]
-
-Rules:
-- All words must be lowercase
-- A valid spelling word is 1–4 words at most (e.g. "mustered up the courage" is acceptable, but a full sentence is not)
-- Ignore any item that is a full sentence (contains a verb and reads as a sentence)
-- Ignore handwritten annotations
-- If no lists are found, return []`;
-
-    // ── API key ───────────────────────────────────────────────────────────────
-    function getApiKey() {
-        return localStorage.getItem('spellquest_gemini_key') || '';
-    }
-
-    function setApiKey(key) {
-        localStorage.setItem('spellquest_gemini_key', key.trim());
-    }
-
-    function hasApiKey() {
-        return !!getApiKey();
+    // Edge Function URL — set from SupabaseClient config
+    function _edgeFnUrl() {
+        return SupabaseClient.get().supabaseUrl + '/functions/v1/ocr';
     }
 
     // ── Image capture ─────────────────────────────────────────────────────────
@@ -65,71 +30,38 @@ Rules:
         });
     }
 
-    // ── Gemini OCR ────────────────────────────────────────────────────────────
-    // Returns an array of { name, words } objects — one per list found in image
-    async function recognizeWithGemini(imageData, onProgress) {
-        const apiKey = getApiKey();
-        if (!apiKey) throw new Error('No Gemini API key set');
-
+    // ── Edge Function OCR ─────────────────────────────────────────────────────
+    async function recognizeWithEdgeFunction(imageData, onProgress) {
         if (onProgress) onProgress(10);
 
         const [meta, base64] = imageData.split(',');
         const mimeType = meta.match(/:(.*?);/)[1];
 
-        const body = {
-            contents: [{
-                parts: [
-                    { text: GEMINI_PROMPT },
-                    { inline_data: { mime_type: mimeType, data: base64 } }
-                ]
-            }],
-            generationConfig: { temperature: 0, maxOutputTokens: 1024 }
-        };
+        if (onProgress) onProgress(25);
 
-        if (onProgress) onProgress(30);
-
-        const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+        const response = await fetch(_edgeFnUrl(), {
             method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(body)
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SupabaseClient.get().supabaseKey
+            },
+            body: JSON.stringify({ imageBase64: base64, mimeType })
         });
 
         if (onProgress) onProgress(80);
 
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
-            throw new Error(`Gemini error: ${err?.error?.message || `HTTP ${response.status}`}`);
+            throw new Error(err?.error || `Edge Function HTTP ${response.status}`);
         }
 
         const data = await response.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
         if (onProgress) onProgress(95);
 
-        return parseGeminiResponse(text);
-    }
-
-    // Returns [{ name: string, words: string[] }]
-    function parseGeminiResponse(text) {
-        const match = text.match(/\[[\s\S]*\]/);
-        if (!match) return [];
-
-        let parsed;
-        try { parsed = JSON.parse(match[0]); } catch { return []; }
-        if (!Array.isArray(parsed)) return [];
-
-        return parsed
-            .map(item => ({
-                name:  String(item.name  || 'Spelling List').trim(),
-                words: (Array.isArray(item.words) ? item.words : [])
-                    .map(w => String(w).trim().toLowerCase())
-                    .filter(w => w.length >= 2)
-            }))
-            .filter(item => item.words.length > 0);
+        return data.lists || [];
     }
 
     // ── Tesseract fallback ────────────────────────────────────────────────────
-    // Returns a single { name, words } object
     async function recognizeWithTesseract(imageData, onProgress) {
         if (typeof Tesseract === 'undefined') {
             throw new Error('OCR engine not available');
@@ -151,10 +83,10 @@ Rules:
         const { data } = await worker.recognize(imageData);
         await worker.terminate();
 
-        return [{ name: 'Spelling List', words: parseWordList(data.text) }];
+        return [{ name: 'Spelling List', words: _parseWordList(data.text) }];
     }
 
-    function parseWordList(rawText) {
+    function _parseWordList(rawText) {
         const words = [];
         for (let line of rawText.split('\n')) {
             let cleaned = line
@@ -174,22 +106,19 @@ Rules:
     }
 
     // ── Public: recognizeMultipleLists ────────────────────────────────────────
-    // Returns [{ name, words }] — may contain multiple lists if Gemini finds them
     async function recognizeMultipleLists(imageData, onProgress) {
-        if (hasApiKey()) {
-            try {
-                const lists = await recognizeWithGemini(imageData, onProgress);
-                if (onProgress) onProgress(100);
-                if (lists.length > 0) return lists;
-                console.warn('OCR: Gemini returned no lists, trying Tesseract');
-            } catch (err) {
-                console.warn('OCR: Gemini failed, falling back to Tesseract —', err.message);
-            }
+        try {
+            const lists = await recognizeWithEdgeFunction(imageData, onProgress);
+            if (onProgress) onProgress(100);
+            if (lists.length > 0) return lists;
+            console.warn('OCR: Edge Function returned no lists, trying Tesseract');
+        } catch (err) {
+            console.warn('OCR: Edge Function failed, falling back to Tesseract —', err.message);
         }
         return recognizeWithTesseract(imageData, onProgress);
     }
 
-    // Legacy single-list API (used by handwriting module and old call sites)
+    // Legacy single-list API
     async function recognizeList(imageData, onProgress) {
         const lists = await recognizeMultipleLists(imageData, onProgress);
         return lists.length > 0 ? lists[0].words : [];
@@ -198,10 +127,6 @@ Rules:
     return {
         captureImage,
         recognizeList,
-        recognizeMultipleLists,
-        parseWordList,
-        setApiKey,
-        getApiKey,
-        hasApiKey
+        recognizeMultipleLists
     };
 })();
