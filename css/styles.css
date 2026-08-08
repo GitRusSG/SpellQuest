@@ -998,6 +998,23 @@ input[type="date"].form-input { height: 52px; }
     font-weight: 600;
 }
 
+.skipped-item {
+    padding: 10px 14px;
+    background: #FFF3E0;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.skip-btn {
+    color: var(--text-light);
+    font-size: 14px;
+    padding: 6px 16px;
+    margin: 0 auto;
+    display: block;
+}
+
 /* ── Results history ── */
 .results-history { display: flex; flex-direction: column; gap: 8px; }
 
