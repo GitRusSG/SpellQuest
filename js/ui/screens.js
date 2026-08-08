@@ -1081,11 +1081,6 @@ const Screens = (() => {
         const items = phase === 'words' ? testState.words : testState.sentences;
         return items[currentIndex];
     }
-        document.getElementById('keyboard-container')
-            .appendChild(Keyboard.render());
-
-        setTimeout(() => Voice.pronounceWord(word), 400);
-    }
 
     function exitTest() {
         // Pause modal
