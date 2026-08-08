@@ -1126,23 +1126,36 @@ input[type="date"].form-input { height: 52px; }
         padding: 24px 32px;
     }
 
+    .add-option-icon { font-size: 56px; }
+    .add-option-title { font-size: 19px; }
+
     .hero-grid {
         grid-template-columns: repeat(4, 1fr);
         max-width: 640px;
         margin: 0 auto;
         padding: 24px 32px;
     }
+    .hero-emoji { font-size: 48px; }
 
     .stats-grid {
         grid-template-columns: repeat(4, 1fr);
     }
+    .stat-value { font-size: 32px; }
 
     .capture-body, .paper-capture-body, .start-body, .feedback-body {
         padding: 60px 48px;
     }
+    .capture-icon, .paper-capture-icon { font-size: 88px; }
+    .start-hero { font-size: 96px; }
+    .fb-icon { font-size: 96px; }
+    .paper-icon { font-size: 88px; }
+
+    .home-hero { font-size: 64px; }
+    .home-name { font-size: 26px; }
 
     .listen-area { padding: 28px 32px 16px; }
-    .answer-display { margin: 12px 32px; }
+    .listen-btn { font-size: 18px; height: 60px; }
+    .answer-display { margin: 12px 32px; font-size: 26px; }
 
     .keyboard { padding: 12px 24px 16px; }
     .key { height: 52px; max-width: 48px; font-size: 18px; }
@@ -1150,11 +1163,18 @@ input[type="date"].form-input { height: 52px; }
     .key-check { max-width: 100px; }
 
     .results-actions { padding: 24px 32px; }
+    .results-medal { font-size: 72px; }
+    .results-score { font-size: 88px; }
 
     .practice-card-top { padding: 20px 24px; }
+    .practice-card-name { font-size: 19px; }
+    .last-score { font-size: 26px; }
+    .practice-play-btn { font-size: 34px; }
 
     .home-header { padding: 24px 32px 18px; }
     .home-hero-row { gap: 16px; }
+
+    .empty-icon { font-size: 72px; }
 
     .modal {
         border-radius: var(--radius);
@@ -1163,6 +1183,9 @@ input[type="date"].form-input { height: 52px; }
     .modal-overlay {
         align-items: center;
     }
+
+    /* Hide camera-only buttons on desktop (no camera on desktop) */
+    .camera-only-btn { display: none !important; }
 }
 
 /* ── Level-up content ── */
