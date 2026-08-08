@@ -20,6 +20,8 @@ Example output for 5 items: ["undeterred","infuriated","mustered up the courage"
 Rules:
 - Read exactly what is written — do NOT correct spelling mistakes
 - Preserve the child's spelling even if wrong (that's the whole point — we're checking their spelling)
+- IGNORE any words that are crossed out, scribbled over, or heavily coloured over — treat them as if they don't exist
+- If a line has a crossed-out word followed by a rewritten word, only read the rewritten word
 - All lowercase
 - One entry per expected item (items may be single words or multi-word phrases)
 - If you see fewer items than expected, pad with "" at the end`;

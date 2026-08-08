@@ -1267,6 +1267,17 @@ input[type="date"].form-input { height: 52px; }
 .paper-capture-body h2 { font-size: 22px; font-weight: 700; }
 .paper-capture-body p { font-size: 14px; color: var(--text-light); }
 
+.paper-hint {
+    font-size: 13px;
+    color: var(--text-light);
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin-top: 14px;
+    line-height: 1.4;
+    max-width: 320px;
+}
+
 /* Paper review */
 .paper-review-body {
     padding: 0 0 24px;

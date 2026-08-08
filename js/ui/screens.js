@@ -945,6 +945,7 @@ const Screens = (() => {
                     style="margin-top:10px;">
                     🖼️ Choose Picture
                 </button>
+                <p class="paper-hint">✏️ If you made a mistake, colour over it completely so it won't be read as a word.</p>
                 <div id="paper-check-status" style="display:none;">
                     <p class="ocr-reading-text">Reading your handwriting…</p>
                     <div class="xp-bar">
