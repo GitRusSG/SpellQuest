@@ -49,6 +49,35 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Verify the user is authenticated
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized — please sign in" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Verify the JWT by calling Supabase Auth
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+                      Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const token = authHeader.replace("Bearer ", "");
+
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "apikey": supabaseKey,
+    },
+  });
+
+  if (!userRes.ok) {
+    return new Response(
+      JSON.stringify({ error: "Invalid or expired session — please sign in again" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   // Get Gemini key from Supabase secrets
   const geminiKey = Deno.env.get("GEMINI_KEY");
   if (!geminiKey) {

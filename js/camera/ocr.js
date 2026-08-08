@@ -39,11 +39,19 @@ const OCR = (() => {
 
         if (onProgress) onProgress(25);
 
+        // Get the user's session token for authenticated requests
+        const { data: { session } } = await SupabaseClient.get().auth.getSession();
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+            throw new Error('Not authenticated — please sign in');
+        }
+
         const response = await fetch(_edgeFnUrl(), {
             method:  'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'apikey': SupabaseClient.get().supabaseKey
+                'apikey': SupabaseClient.get().supabaseKey,
+                'Authorization': `Bearer ${accessToken}`
             },
             body: JSON.stringify({ imageBase64: base64, mimeType })
         });
