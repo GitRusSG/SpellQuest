@@ -728,6 +728,14 @@ const Screens = (() => {
         const words = window._reviewWords.filter(w => w.trim().length > 0);
         if (words.length === 0) { alert('Please add at least one word.'); return; }
 
+        // Profanity check on all submitted words
+        for (const w of words) {
+            if (ProfanityGuard.check(w)) {
+                ProfanityGuard.showLockoutScreen();
+                return;
+            }
+        }
+
         _activeListName = name;
         window._reviewWords = words;
 
@@ -1003,6 +1011,14 @@ const Screens = (() => {
 
             if (el) el.style.width = '100%';
 
+            // Check for profanity in any of the submitted answers
+            for (const answer of userAnswers) {
+                if (ProfanityGuard.check(answer)) {
+                    ProfanityGuard.showLockoutScreen();
+                    return;
+                }
+            }
+
             // Compare each answer to the expected item
             testState.results = [];
             testState.mistakes = [];
@@ -1252,6 +1268,11 @@ const Screens = (() => {
     }
 
     function _checkAnswer(userAnswer) {
+        // Profanity check
+        if (ProfanityGuard.check(userAnswer)) {
+            ProfanityGuard.showLockoutScreen();
+            return;
+        }
         const item    = _getCurrentItem();
         const correct = Checker.check(userAnswer, item);
         const type    = testState.phase === 'words' ? 'word' : 'sentence';
