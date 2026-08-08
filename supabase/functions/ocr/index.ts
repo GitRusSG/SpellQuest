@@ -9,24 +9,33 @@ const PROMPT = `You are processing a school spelling list sheet.
 
 The image may contain ONE or MULTIPLE spelling lists on the same page.
 
+Each spelling list typically has TWO sections:
+1. A block of NUMBERED WORDS (single words or short phrases, in a table/grid)
+2. A block of NUMBERED DICTATION SENTENCES (full sentences for dictation practice, often containing underlined or bold words)
+
+Sometimes a list only has words and no sentences. Sometimes both.
+
 For EACH spelling list you find:
 1. Extract its name/title (e.g. "Spelling & Dictation 1 - Vocabulary for Writing")
-2. Extract ALL numbered items from the spelling list — these may be single words, short phrases, or short sentences
-3. Items appear in a numbered table — extract them in order
+2. Extract the numbered WORDS/PHRASES from the table (items 1-10 typically)
+3. Extract the DICTATION SENTENCES separately (items 11, 12, 13 typically — full sentences)
 
 Return ONLY a JSON array, no markdown, no explanation:
 [
   {
     "name": "list name here",
-    "words": ["word1", "mustered up the courage", "brimming with excitement"]
+    "words": ["undeterred", "infuriated", "mustered up the courage"],
+    "sentences": [
+      "The marvellous performance by the dancers is etched in my memory.",
+      "I knew I had to face the daunting task of confessing, even if it meant getting into trouble."
+    ]
   }
 ]
 
 Rules:
-- All items must be lowercase
-- Include single words, multi-word phrases, and short sentences that are numbered items in the spelling list
-- DO include items like "mustered up the courage", "brimming with excitement", "etched in my memory" — these are valid spelling items
-- DO NOT include the full dictation sentences at the bottom of each list (these are long sentences used as examples, typically starting with a number followed by a full paragraph)
+- Words array: all lowercase. These are single words or short phrases from the numbered table.
+- Sentences array: preserve original capitalization and punctuation. These are full dictation sentences.
+- If there are no sentences for a list, use an empty array: "sentences": []
 - Ignore handwritten annotations
 - If no lists are found, return []`;
 
@@ -128,20 +137,24 @@ Deno.serve(async (req) => {
 
     // Parse the JSON response from Gemini
     const match = text.match(/\[[\s\S]*\]/);
-    let lists: { name: string; words: string[] }[] = [];
+    let lists: { name: string; words: string[]; sentences: string[] }[] = [];
 
     if (match) {
       try {
         const parsed = JSON.parse(match[0]);
         if (Array.isArray(parsed)) {
           lists = parsed
-            .map((item: { name?: string; words?: string[] }) => ({
+            .map((item: { name?: string; words?: string[]; sentences?: string[] }) => ({
               name: String(item.name || "Spelling List").trim(),
               words: (Array.isArray(item.words) ? item.words : [])
                 .map((w: string) => String(w).trim().toLowerCase())
                 .filter((w: string) => w.length >= 2),
+              sentences: (Array.isArray(item.sentences) ? item.sentences : [])
+                .map((s: string) => String(s).trim())
+                .filter((s: string) => s.length >= 5),
             }))
-            .filter((item: { words: string[] }) => item.words.length > 0);
+            .filter((item: { words: string[]; sentences: string[] }) =>
+              item.words.length > 0 || item.sentences.length > 0);
         }
       } catch {
         // JSON parse failed — lists stays empty

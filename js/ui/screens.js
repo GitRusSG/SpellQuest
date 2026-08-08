@@ -371,8 +371,9 @@ const Screens = (() => {
         if (!list) return;
         _activeListId   = list.id;
         _activeListName = list.name;
-        window._reviewWords = [...list.words];
-        showStartScreen(list.words);
+        window._reviewWords     = [...list.words];
+        window._reviewSentences = [...(list.sentences || [])];
+        showStartScreen(list.words, list.sentences || []);
     }
 
     async function editList(listId) {
@@ -381,7 +382,8 @@ const Screens = (() => {
         if (!list) return;
         _activeListId   = list.id;
         _activeListName = list.name;
-        window._reviewWords = [...list.words];
+        window._reviewWords     = [...list.words];
+        window._reviewSentences = [...(list.sentences || [])];
         window._editTestDate = list.test_date || '';
         _showReviewScreen();
     }
@@ -459,7 +461,8 @@ const Screens = (() => {
             if (lists.length === 1) {
                 _activeListId   = null;
                 _activeListName = lists[0].name;
-                window._reviewWords  = [...lists[0].words];
+                window._reviewWords     = [...lists[0].words];
+                window._reviewSentences = [...(lists[0].sentences || [])];
                 window._editTestDate = '';
                 _showReviewScreen();
             } else {
@@ -507,7 +510,8 @@ const Screens = (() => {
         if (!list) return;
         _activeListId   = null;
         _activeListName = list.name;
-        window._reviewWords  = [...list.words];
+        window._reviewWords     = [...list.words];
+        window._reviewSentences = [...(list.sentences || [])];
         window._editTestDate = '';
         _showReviewScreen();
     }
@@ -572,9 +576,10 @@ const Screens = (() => {
     // ── Review screen ─────────────────────────────────────────────────────────
 
     function _showReviewScreen() {
-        const words  = window._reviewWords;
-        const isNew  = !_activeListId;
-        const items  = words.map((w,i) => `
+        const words     = window._reviewWords;
+        const sentences = window._reviewSentences || [];
+        const isNew     = !_activeListId;
+        const items = words.map((w,i) => `
             <div class="word-item">
                 <span class="word-item-num">${i+1}.</span>
                 <input class="word-item-input" value="${_esc(w)}"
@@ -583,6 +588,17 @@ const Screens = (() => {
                     autocapitalize="off" spellcheck="false">
                 <button class="word-item-del"
                     onclick="Screens._wordDel(${i})">✕</button>
+            </div>`).join('');
+
+        const sentItems = sentences.map((s,i) => `
+            <div class="word-item">
+                <span class="word-item-num">${i+1}.</span>
+                <input class="word-item-input" value="${_esc(s)}"
+                    onchange="Screens._sentChange(${i},this.value)"
+                    autocomplete="off" autocorrect="off"
+                    autocapitalize="off" spellcheck="false">
+                <button class="word-item-del"
+                    onclick="Screens._sentDel(${i})">✕</button>
             </div>`).join('');
 
         app.innerHTML = `
@@ -611,6 +627,17 @@ const Screens = (() => {
                 </div>
                 <div id="word-list">${items}</div>
             </div>
+            ${sentences.length > 0 || !isNew ? `
+            <div class="card">
+                <div class="review-header">
+                    <span class="form-label" style="margin:0">
+                        📝 Sentences (${sentences.length})
+                    </span>
+                    <button class="btn btn-secondary btn-small"
+                        onclick="Screens._sentAdd()">+ Add</button>
+                </div>
+                <div id="sent-list">${sentItems || '<p style="color:var(--text-light);font-size:13px;">No dictation sentences</p>'}</div>
+            </div>` : ''}
             <button class="btn btn-primary btn-full mt-12"
                 onclick="Screens.confirmAndSave()">
                 ${isNew ? '💾 Save &amp; Start Spelling' : '✓ Save Changes &amp; Start Spelling'}
@@ -624,7 +651,25 @@ const Screens = (() => {
         window._reviewWords.push('');
         _showReviewScreen();
         setTimeout(() => {
-            const inputs = document.querySelectorAll('.word-item-input');
+            const inputs = document.querySelectorAll('#word-list .word-item-input');
+            inputs[inputs.length-1]?.focus();
+        }, 50);
+    }
+
+    function _sentChange(i,v) {
+        if (!window._reviewSentences) window._reviewSentences = [];
+        window._reviewSentences[i] = v.trim();
+    }
+    function _sentDel(i) {
+        (window._reviewSentences || []).splice(i,1);
+        _showReviewScreen();
+    }
+    function _sentAdd() {
+        if (!window._reviewSentences) window._reviewSentences = [];
+        window._reviewSentences.push('');
+        _showReviewScreen();
+        setTimeout(() => {
+            const inputs = document.querySelectorAll('#sent-list .word-item-input');
             inputs[inputs.length-1]?.focus();
         }, 50);
     }
@@ -663,7 +708,8 @@ const Screens = (() => {
                 }
             }
 
-            const result = await DB.saveList(name, words, _activeListId||null, { testDate });
+            const sents = window._reviewSentences || [];
+            const result = await DB.saveList(name, words, _activeListId||null, { sentences: sents, testDate });
             if (result.success && !_activeListId) {
                 _activeListId = result.id;
             }
@@ -701,14 +747,23 @@ const Screens = (() => {
 
     // ── Start screen ──────────────────────────────────────────────────────────
 
-    function showStartScreen(words) {
+    function showStartScreen(words, sentences) {
+        const sents = sentences || window._reviewSentences || [];
+        // Stash for use by startTest
+        window._startWords = words;
+        window._startSentences = sents;
+        const totalItems = words.length + sents.length;
+        const metaText = sents.length > 0
+            ? `${words.length} words + ${sents.length} sentences`
+            : `${words.length} words`;
+
         app.innerHTML = `
         <div class="screen start-screen">
             ${_header('Screens.showHome()')}
             <div class="start-body">
                 <div class="start-hero">${Heroes.getSelected().emoji}</div>
                 <h2 class="start-name">${_esc(_activeListName||'Spelling Test')}</h2>
-                <p class="start-meta">${words.length} words · listen carefully!</p>
+                <p class="start-meta">${metaText} · listen carefully!</p>
                 <div class="mode-toggle">
                     <button id="mode-kb"
                         class="${window._testMode!=='paper'?'active':''}"
@@ -726,7 +781,7 @@ const Screens = (() => {
                     </button>
                 </div>
                 <button class="btn btn-primary start-btn"
-                    onclick="Screens.startTest(${JSON.stringify(words).replace(/"/g,'&quot;')})">
+                    onclick="Screens.startTest()">
                     ▶ Start Spelling
                 </button>
             </div>
@@ -735,8 +790,17 @@ const Screens = (() => {
 
     // ── Test ──────────────────────────────────────────────────────────────────
 
-    function startTest(words) {
-        testState = { words, currentIndex:0, results:[], mistakes:[] };
+    function startTest() {
+        const words     = window._startWords || window._reviewWords || [];
+        const sentences = window._startSentences || window._reviewSentences || [];
+        testState = {
+            words,
+            sentences,
+            currentIndex: 0,
+            phase: 'words',  // 'words' | 'sentences'
+            results: [],     // { item, userAnswer, correct, type:'word'|'sentence' }
+            mistakes: []
+        };
         if (window._testMode === 'paper') {
             _showPaperDictation();
         } else {
@@ -747,62 +811,81 @@ const Screens = (() => {
     // ── Paper mode: dictation then single photo ───────────────────────────────
 
     function _showPaperDictation() {
-        const { words, currentIndex } = testState;
-        const word  = words[currentIndex];
-        const total = words.length;
-        const isPhrase = word.split(/\s+/).length >= 3;
+        const { phase, currentIndex } = testState;
+        const items = phase === 'words' ? testState.words : testState.sentences;
+        const item  = items[currentIndex];
+        const totalAll = testState.words.length + testState.sentences.length;
+        const globalIdx = phase === 'words'
+            ? currentIndex
+            : testState.words.length + currentIndex;
+        const isPhrase = item.split(/\s+/).length >= 3;
+        const isSentence = phase === 'sentences';
 
         app.innerHTML = `
         <div class="screen test-screen">
             <div class="test-topbar">
                 <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
                 <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
-                <div class="test-counter">${currentIndex+1}/${total}</div>
+                <div class="test-counter">${globalIdx+1}/${totalAll}</div>
             </div>
             <div class="test-prog-bar">
                 <div class="test-prog-fill"
-                    style="width:${Math.round((currentIndex/total)*100)}%"></div>
+                    style="width:${Math.round((globalIdx/totalAll)*100)}%"></div>
             </div>
             <div class="paper-dictation">
                 <div class="paper-icon">✍️</div>
-                <div class="paper-instruction">Write word ${currentIndex+1} on your paper</div>
-                <div class="paper-word-num">#${currentIndex+1}</div>
+                ${isSentence
+                    ? `<div class="sentence-badge">📝 Dictation Sentence</div>`
+                    : ''}
+                <div class="paper-instruction">
+                    Write ${isSentence ? 'sentence' : 'word'} ${globalIdx+1} on your paper
+                </div>
+                <div class="paper-word-num">#${globalIdx+1}</div>
                 <div class="listen-area">
                     <button class="listen-btn" onclick="Screens.listenWord()">🔊 Listen</button>
-                    ${isPhrase ? `<button class="listen-btn listen-sm" onclick="Screens.stopSpeech()">⏹ Stop</button>` : ''}
+                    ${isPhrase || isSentence ? `<button class="listen-btn listen-sm" onclick="Screens.stopSpeech()">⏹ Stop</button>` : ''}
                 </div>
                 <button class="btn btn-primary paper-next-btn"
                     onclick="Screens.paperNextWord()">
-                    ${currentIndex < total - 1 ? 'Next Word →' : '📸 Done — Take Photo'}
+                    ${globalIdx < totalAll - 1 ? 'Next →' : '📸 Done — Take Photo'}
                 </button>
             </div>
         </div>`;
 
-        setTimeout(() => Voice.pronounceWord(word), 400);
+        setTimeout(() => Voice.pronounceWord(item), 400);
     }
 
     function paperNextWord() {
         testState.currentIndex++;
-        if (testState.currentIndex >= testState.words.length) {
-            _showPaperCapture();
+        const items = testState.phase === 'words' ? testState.words : testState.sentences;
+
+        if (testState.currentIndex >= items.length) {
+            if (testState.phase === 'words' && testState.sentences.length > 0) {
+                testState.phase = 'sentences';
+                testState.currentIndex = 0;
+                _showPaperDictation();
+            } else {
+                _showPaperCapture();
+            }
         } else {
             _showPaperDictation();
         }
     }
 
     function _showPaperCapture() {
-        const total = testState.words.length;
+        const total = testState.words.length + testState.sentences.length;
         app.innerHTML = `
         <div class="screen test-screen">
             <div class="test-topbar">
                 <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
                 <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
-                <div class="test-counter">${total} words</div>
+                <div class="test-counter">${total} items</div>
             </div>
             <div class="paper-capture-body">
                 <div class="paper-capture-icon">📸</div>
                 <h2>Take a photo of your answers</h2>
-                <p>Make sure all ${total} words are visible</p>
+                <p>Make sure all ${total} answers are visible
+                    ${testState.sentences.length > 0 ? '(words and sentences)' : ''}</p>
                 <button class="btn btn-primary capture-btn"
                     onclick="Screens.submitPaperPhoto()">
                     📷 Take Photo / Choose Image
@@ -825,12 +908,14 @@ const Screens = (() => {
             const el = document.getElementById('paper-progress');
             if (el) el.style.width = '30%';
 
-            // Call the handwriting check Edge Function
             const { data: { session } } = await SupabaseClient.get().auth.getSession();
             const [meta, base64] = imageData.split(',');
             const mimeType = meta.match(/:(.*?);/)[1];
 
             if (el) el.style.width = '50%';
+
+            const allItems = [...testState.words, ...testState.sentences];
+            const totalCount = allItems.length;
 
             const response = await fetch(
                 SupabaseClient.get().supabaseUrl + '/functions/v1/check-handwriting',
@@ -844,7 +929,7 @@ const Screens = (() => {
                     body: JSON.stringify({
                         imageBase64: base64,
                         mimeType,
-                        wordCount: testState.words.length
+                        wordCount: totalCount
                     })
                 }
             );
@@ -861,16 +946,16 @@ const Screens = (() => {
 
             if (el) el.style.width = '100%';
 
-            // Compare each answer to the expected word
-            testState.currentIndex = 0;
+            // Compare each answer to the expected item
             testState.results = [];
             testState.mistakes = [];
 
-            for (let i = 0; i < testState.words.length; i++) {
-                const expected = testState.words[i];
+            for (let i = 0; i < totalCount; i++) {
+                const expected = allItems[i];
                 const answer   = userAnswers[i] || '';
                 const correct  = Checker.check(answer, expected);
-                testState.results.push({ word: expected, userAnswer: answer, correct });
+                const type     = i < testState.words.length ? 'word' : 'sentence';
+                testState.results.push({ item: expected, userAnswer: answer, correct, type });
                 if (!correct) testState.mistakes.push(expected);
                 if (correct) {
                     Progression.addXP(10);
@@ -878,8 +963,7 @@ const Screens = (() => {
                 }
             }
 
-            // Show paper results review before final results
-            _showPaperReview(imageData, userAnswers);
+            _showPaperReview(imageData, userAnswers, allItems);
 
         } catch (err) {
             console.error('Paper check error:', err);
@@ -888,21 +972,25 @@ const Screens = (() => {
         }
     }
 
-    function _showPaperReview(imageData, userAnswers) {
-        const rows = testState.words.map((word, i) => {
+    function _showPaperReview(imageData, userAnswers, allItems) {
+        const rows = allItems.map((item, i) => {
             const answer  = userAnswers[i] || '';
-            const correct = Checker.check(answer, word);
+            const correct = Checker.check(answer, item);
+            const type    = i < testState.words.length ? 'word' : 'sentence';
             return `
             <div class="paper-review-row ${correct ? 'paper-correct' : 'paper-wrong'}">
                 <span class="paper-review-num">${i+1}.</span>
                 <span class="paper-review-icon">${correct ? '✓' : '✕'}</span>
-                <span class="paper-review-answer">${_esc(answer || '—')}</span>
-                ${!correct ? `<span class="paper-review-expected">→ ${_esc(word)}</span>` : ''}
+                <div class="paper-review-content">
+                    <span class="paper-review-answer">${_esc(answer || '—')}</span>
+                    ${!correct ? `<span class="paper-review-expected">→ ${_esc(item)}</span>` : ''}
+                    ${type === 'sentence' ? '<span class="paper-review-type">sentence</span>' : ''}
+                </div>
             </div>`;
         }).join('');
 
         const correct = testState.results.filter(r => r.correct).length;
-        const total   = testState.words.length;
+        const total   = allItems.length;
 
         app.innerHTML = `
         <div class="screen">
@@ -938,9 +1026,15 @@ const Screens = (() => {
     }
 
     function _showTestWord() {
-        const { words, currentIndex } = testState;
-        const word    = words[currentIndex];
-        const isPhrase = word.split(/\s+/).length >= 3;
+        const { phase, currentIndex } = testState;
+        const items = phase === 'words' ? testState.words : testState.sentences;
+        const item  = items[currentIndex];
+        const isPhrase = item.split(/\s+/).length >= 3;
+        const isSentence = phase === 'sentences';
+        const totalAll = testState.words.length + testState.sentences.length;
+        const globalIdx = phase === 'words'
+            ? currentIndex
+            : testState.words.length + currentIndex;
         Keyboard.reset();
 
         app.innerHTML = `
@@ -948,19 +1042,20 @@ const Screens = (() => {
             <div class="test-topbar">
                 <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
                 <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
-                <div class="test-counter">${currentIndex+1}/${words.length}</div>
+                <div class="test-counter">${globalIdx+1}/${totalAll}</div>
             </div>
             <div class="test-prog-bar">
                 <div class="test-prog-fill"
-                    style="width:${Math.round((currentIndex/words.length)*100)}%">
+                    style="width:${Math.round((globalIdx/totalAll)*100)}%">
                 </div>
             </div>
+            ${isSentence ? `<div class="sentence-badge">📝 Dictation Sentence</div>` : ''}
             <div class="listen-area">
                 <button class="listen-btn" onclick="Screens.listenWord()">🔊 Listen</button>
-                ${isPhrase ? `<button class="listen-btn listen-sm" onclick="Screens.stopSpeech()">⏹ Stop</button>` : ''}
+                ${isPhrase || isSentence ? `<button class="listen-btn listen-sm" onclick="Screens.stopSpeech()">⏹ Stop</button>` : ''}
             </div>
             <div class="answer-display" id="answer-display">
-                Type your answer below
+                ${isSentence ? 'Type the full sentence below' : 'Type your answer below'}
             </div>
             <div id="keyboard-container"></div>
         </div>`;
@@ -969,12 +1064,23 @@ const Screens = (() => {
             val => {
                 const d = document.getElementById('answer-display');
                 if (d) {
-                    d.textContent = val || 'Type your answer below';
+                    d.textContent = val || (isSentence ? 'Type the full sentence below' : 'Type your answer below');
                     d.className = val ? 'answer-display answer-filled' : 'answer-display';
                 }
             },
             val => _checkAnswer(val)
         );
+        document.getElementById('keyboard-container')
+            .appendChild(Keyboard.render());
+
+        setTimeout(() => Voice.pronounceWord(item), 400);
+    }
+
+    function _getCurrentItem() {
+        const { phase, currentIndex } = testState;
+        const items = phase === 'words' ? testState.words : testState.sentences;
+        return items[currentIndex];
+    }
         document.getElementById('keyboard-container')
             .appendChild(Keyboard.render());
 
@@ -1026,7 +1132,7 @@ const Screens = (() => {
         showHome();
     }
 
-    function listenWord() { Voice.pronounceWord(testState.words[testState.currentIndex]); }
+    function listenWord() { Voice.pronounceWord(_getCurrentItem()); }
     function stopSpeech() { window.speechSynthesis.cancel(); }
 
     async function paperCapture() {
@@ -1093,23 +1199,32 @@ const Screens = (() => {
     }
 
     function _checkAnswer(userAnswer) {
-        const word    = testState.words[testState.currentIndex];
-        const correct = Checker.check(userAnswer, word);
-        testState.results.push({ word, userAnswer:userAnswer.trim().toLowerCase(), correct });
-        if (!correct) testState.mistakes.push(word);
+        const item    = _getCurrentItem();
+        const correct = Checker.check(userAnswer, item);
+        const type    = testState.phase === 'words' ? 'word' : 'sentence';
+        testState.results.push({ item, userAnswer: userAnswer.trim().toLowerCase(), correct, type });
+        if (!correct) testState.mistakes.push(item);
         let lvl = null;
         if (correct) { lvl = Progression.addXP(10); Progression.addCoins(1); }
-        _showFeedback(correct, word, userAnswer, lvl);
+        _showFeedback(correct, item, userAnswer, lvl);
     }
 
-    function _showFeedback(correct, word, userAnswer, lvl) {
+    function _showFeedback(correct, item, userAnswer, lvl) {
+        const totalAll = testState.words.length + testState.sentences.length;
+        const globalIdx = testState.phase === 'words'
+            ? testState.currentIndex
+            : testState.words.length + testState.currentIndex;
+        const isLast = (testState.phase === 'sentences'
+            ? testState.currentIndex >= testState.sentences.length - 1
+            : testState.currentIndex >= testState.words.length - 1 && testState.sentences.length === 0);
+
         app.innerHTML = `
         <div class="screen feedback-screen">
             <div class="test-topbar">
                 <button class="test-exit-btn" onclick="Screens.exitTest()">✕</button>
                 <div class="test-list-name">${_esc(_activeListName||'Spelling')}</div>
                 <div class="test-counter">
-                    ${testState.currentIndex+1}/${testState.words.length}
+                    ${globalIdx+1}/${totalAll}
                 </div>
             </div>
             <div class="feedback-body">
@@ -1126,14 +1241,13 @@ const Screens = (() => {
                            </div>
                            <div class="fb-row mt-8">
                                <span class="fb-lbl">Correct:</span>
-                               <span class="fb-word-right">${_esc(word)}</span>
+                               <span class="fb-word-right">${_esc(item)}</span>
                            </div>
                        </div>`}
             </div>
             <button class="btn btn-primary feedback-next"
                 onclick="Screens.nextWord()">
-                ${testState.currentIndex < testState.words.length-1
-                    ? 'Next Word →' : 'See Results 🏆'}
+                ${isLast ? 'See Results 🏆' : 'Next →'}
             </button>
         </div>`;
         if (lvl?.leveledUp) setTimeout(() => Animations.showLevelUp(lvl.newLevel, lvl.bonusCoins), 500);
@@ -1141,17 +1255,31 @@ const Screens = (() => {
 
     function nextWord() {
         testState.currentIndex++;
-        if (testState.currentIndex >= testState.words.length) showResults();
-        else _showTestWord();
+        const items = testState.phase === 'words' ? testState.words : testState.sentences;
+
+        if (testState.currentIndex >= items.length) {
+            // Current phase done — transition or finish
+            if (testState.phase === 'words' && testState.sentences.length > 0) {
+                // Move to sentences phase
+                testState.phase = 'sentences';
+                testState.currentIndex = 0;
+                _showTestWord();
+            } else {
+                // All done
+                showResults();
+            }
+        } else {
+            _showTestWord();
+        }
     }
 
     // ── Results ───────────────────────────────────────────────────────────────
 
     async function showResults() {
-        TestPause.clear(); // any paused state is now stale
-        const { results, mistakes, words } = testState;
+        TestPause.clear();
+        const { results, mistakes, words, sentences } = testState;
         const correct = results.filter(r=>r.correct).length;
-        const total   = words.length;
+        const total   = results.length;
         const pct     = _pct(correct, total);
         const medal   = pct===100?'🥇':pct>=80?'🥈':pct>=60?'🥉':'📝';
 
@@ -1212,13 +1340,22 @@ const Screens = (() => {
 
     function practiceMistakes() {
         if (!testState.mistakes.length) return;
-        window._reviewWords = [...testState.mistakes];
-        showStartScreen(testState.mistakes);
+        // Split mistakes back into words and sentences
+        const mistakeWords = testState.mistakes.filter(m => testState.words.includes(m));
+        const mistakeSents = testState.mistakes.filter(m => testState.sentences.includes(m));
+        window._startWords     = mistakeWords;
+        window._startSentences = mistakeSents;
+        window._reviewWords    = mistakeWords;
+        window._reviewSentences = mistakeSents;
+        showStartScreen(mistakeWords, mistakeSents);
     }
 
     function practiceAgain() {
-        window._reviewWords = [...testState.words];
-        showStartScreen(testState.words);
+        window._startWords     = [...testState.words];
+        window._startSentences = [...testState.sentences];
+        window._reviewWords    = [...testState.words];
+        window._reviewSentences = [...testState.sentences];
+        showStartScreen(testState.words, testState.sentences);
     }
 
     // ── Results history ───────────────────────────────────────────────────────
@@ -1423,6 +1560,7 @@ const Screens = (() => {
         pickOneList, saveAllAndGoHome,
         showTypeWords, processTypeWords,
         _showReviewScreen, _wordChange, _wordDel, _wordAdd,
+        _sentChange, _sentDel, _sentAdd,
         confirmAndSave,
         showStartScreen, startTest,
         exitTest, pauseTest, abandonTest,

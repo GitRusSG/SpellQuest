@@ -58,8 +58,8 @@ const DB = (() => {
         return data;
     }
 
-    // Save a single list. Accepts { name, words, testDate?, status?, existingId? }
-    async function saveList(name, words, existingId = null, { testDate = null, status = 'active' } = {}) {
+    // Save a single list. Accepts { name, words, sentences?, testDate?, status?, existingId? }
+    async function saveList(name, words, existingId = null, { sentences = [], testDate = null, status = 'active' } = {}) {
         const user = Auth.getUser();
         if (!user) return { success: false };
 
@@ -67,6 +67,7 @@ const DB = (() => {
         const fields = {
             name,
             words,
+            sentences: sentences || [],
             status,
             test_date:  testDate || null,
             updated_at: new Date().toISOString()
@@ -91,7 +92,10 @@ const DB = (() => {
     // Save multiple lists at once (from multi-list OCR). Returns array of saved ids.
     async function saveAllLists(lists) {
         const results = await Promise.all(
-            lists.map(l => saveList(l.name, l.words, null, { testDate: l.testDate || null }))
+            lists.map(l => saveList(l.name, l.words, null, {
+                sentences: l.sentences || [],
+                testDate: l.testDate || null
+            }))
         );
         return results;
     }

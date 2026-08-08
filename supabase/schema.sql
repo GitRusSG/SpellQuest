@@ -52,6 +52,7 @@ create table if not exists public.word_lists (
     user_id    uuid not null references public.profiles(id) on delete cascade,
     name       text not null default 'My Word List',
     words      text[] not null default array[]::text[],
+    sentences  text[] not null default array[]::text[],
     status     text not null default 'active' check (status in ('active', 'archived')),
     test_date  date,
     created_at timestamptz not null default now(),
