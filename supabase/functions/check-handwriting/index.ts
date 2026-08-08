@@ -7,22 +7,22 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 
 const PROMPT = `You are checking a child's handwritten spelling test.
 
-The image shows a sheet of paper with handwritten words, one per line (or one per row in a grid).
-The child was given a list of words to spell. Read each handwritten word exactly as written.
+The image shows a sheet of paper with handwritten answers, one per line (or one per row in a grid).
+Items may be single words, multi-word phrases, or short sentences.
 
-There are exactly WORD_COUNT words expected. Read that many entries from top to bottom.
+There are exactly WORD_COUNT items expected. Read that many entries from top to bottom.
 
-Return ONLY a JSON array of lowercase strings, one per handwritten word, in order from top to bottom.
+Return ONLY a JSON array of lowercase strings, one per handwritten item, in order from top to bottom.
 If a line is blank or unreadable, use "" (empty string) for that position.
 
-Example output for 5 words: ["undeterred","infuriated","exasperation","begrudgingly","decades"]
+Example output for 5 items: ["undeterred","infuriated","mustered up the courage","brimming with excitement","decades"]
 
 Rules:
 - Read exactly what is written — do NOT correct spelling mistakes
 - Preserve the child's spelling even if wrong (that's the whole point — we're checking their spelling)
 - All lowercase
-- One entry per expected word
-- If you see fewer words than expected, pad with "" at the end`;
+- One entry per expected item (items may be single words or multi-word phrases)
+- If you see fewer items than expected, pad with "" at the end`;
 
 Deno.serve(async (req) => {
   const corsHeaders = {

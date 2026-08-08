@@ -750,6 +750,7 @@ const Screens = (() => {
         const { words, currentIndex } = testState;
         const word  = words[currentIndex];
         const total = words.length;
+        const isPhrase = word.split(/\s+/).length >= 3;
 
         app.innerHTML = `
         <div class="screen test-screen">
@@ -768,7 +769,7 @@ const Screens = (() => {
                 <div class="paper-word-num">#${currentIndex+1}</div>
                 <div class="listen-area">
                     <button class="listen-btn" onclick="Screens.listenWord()">🔊 Listen</button>
-                    <button class="listen-btn listen-sm" onclick="Screens.replayWord()">🔊 Again</button>
+                    ${isPhrase ? `<button class="listen-btn listen-sm" onclick="Screens.stopSpeech()">⏹ Stop</button>` : ''}
                 </div>
                 <button class="btn btn-primary paper-next-btn"
                     onclick="Screens.paperNextWord()">
@@ -939,6 +940,7 @@ const Screens = (() => {
     function _showTestWord() {
         const { words, currentIndex } = testState;
         const word    = words[currentIndex];
+        const isPhrase = word.split(/\s+/).length >= 3;
         Keyboard.reset();
 
         app.innerHTML = `
@@ -955,7 +957,7 @@ const Screens = (() => {
             </div>
             <div class="listen-area">
                 <button class="listen-btn" onclick="Screens.listenWord()">🔊 Listen</button>
-                <button class="listen-btn listen-sm" onclick="Screens.replayWord()">🔊 Again</button>
+                ${isPhrase ? `<button class="listen-btn listen-sm" onclick="Screens.stopSpeech()">⏹ Stop</button>` : ''}
             </div>
             <div class="answer-display" id="answer-display">
                 Type your answer below
@@ -1025,7 +1027,7 @@ const Screens = (() => {
     }
 
     function listenWord() { Voice.pronounceWord(testState.words[testState.currentIndex]); }
-    function replayWord()  { Voice.speak(testState.words[testState.currentIndex]); }
+    function stopSpeech() { window.speechSynthesis.cancel(); }
 
     async function paperCapture() {
         const word = testState.words[testState.currentIndex];
@@ -1424,7 +1426,7 @@ const Screens = (() => {
         confirmAndSave,
         showStartScreen, startTest,
         exitTest, pauseTest, abandonTest,
-        listenWord, replayWord,
+        listenWord, stopSpeech,
         paperNextWord, submitPaperPhoto,
         paperCapture, confirmPaper, editPaper, submitPaperEdit,
         nextWord,

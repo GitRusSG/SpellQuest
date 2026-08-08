@@ -11,21 +11,22 @@ The image may contain ONE or MULTIPLE spelling lists on the same page.
 
 For EACH spelling list you find:
 1. Extract its name/title (e.g. "Spelling & Dictation 1 - Vocabulary for Writing")
-2. Extract ONLY the numbered spelling words — ignore dictation sentences, teacher instructions, and handwritten notes
-3. Words appear in a numbered table — extract them in order
+2. Extract ALL numbered items from the spelling list — these may be single words, short phrases, or short sentences
+3. Items appear in a numbered table — extract them in order
 
 Return ONLY a JSON array, no markdown, no explanation:
 [
   {
     "name": "list name here",
-    "words": ["word1", "word2", "word3"]
+    "words": ["word1", "mustered up the courage", "brimming with excitement"]
   }
 ]
 
 Rules:
-- All words must be lowercase
-- A valid spelling word is 1–4 words at most (e.g. "mustered up the courage" is acceptable, but a full sentence is not)
-- Ignore any item that is a full sentence (contains a verb and reads as a sentence)
+- All items must be lowercase
+- Include single words, multi-word phrases, and short sentences that are numbered items in the spelling list
+- DO include items like "mustered up the courage", "brimming with excitement", "etched in my memory" — these are valid spelling items
+- DO NOT include the full dictation sentences at the bottom of each list (these are long sentences used as examples, typically starting with a number followed by a full paragraph)
 - Ignore handwritten annotations
 - If no lists are found, return []`;
 
