@@ -43,12 +43,14 @@ const Tutorial = (() => {
 
     let _step = 0;
     let _overlay = null;
+    let _active = false;
 
     function shouldShow() {
-        return !Store.get('tutorialDone');
+        return !_active && !Store.get('tutorialDone');
     }
 
     function start() {
+        _active = true;
         _step = 0;
         _showStep();
     }
@@ -144,6 +146,7 @@ const Tutorial = (() => {
     }
 
     function _finish() {
+        _active = false;
         _removeOverlay();
         Store.set('tutorialDone', true);
         // Return to home
