@@ -1381,3 +1381,65 @@ input[type="date"].form-input { height: 52px; }
     color: var(--text-light);
     font-style: italic;
 }
+
+/* ── Tutorial overlay ── */
+.tutorial-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 24px 16px;
+    animation: fadeIn 0.2s ease;
+}
+
+.tutorial-bubble {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 24px 20px 20px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-md);
+    animation: tutorialBounce 0.3s ease;
+}
+
+@keyframes tutorialBounce {
+    0%   { transform: translateY(20px); opacity: 0; }
+    60%  { transform: translateY(-4px); opacity: 1; }
+    100% { transform: translateY(0); }
+}
+
+.tutorial-ghost {
+    font-size: 56px;
+    line-height: 1;
+    margin-bottom: 12px;
+}
+
+.tutorial-message {
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--text);
+    margin-bottom: 16px;
+}
+
+.tutorial-next-btn {
+    margin: 0 auto;
+    width: auto;
+    min-width: 140px;
+}
+
+.tutorial-skip-btn {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-light);
+}
+
+.tutorial-highlight {
+    position: relative;
+    z-index: 2001;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.6), 0 0 20px rgba(108, 99, 255, 0.3);
+}
