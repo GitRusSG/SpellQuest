@@ -65,16 +65,38 @@ const Tutorial = (() => {
 
         // Perform pre-render actions
         if (step.action === 'switchManageTab') {
-            const manageTab = document.querySelectorAll('.home-tab')[1];
-            if (manageTab) manageTab.click();
-            // Small delay for tab content to render
-            setTimeout(() => _renderBubble(step), 300);
+            // Switch tab visually without triggering full showHome() re-render
+            const tabs = document.querySelectorAll('.home-tab');
+            if (tabs[0]) tabs[0].classList.remove('home-tab-active');
+            if (tabs[1]) tabs[1].classList.add('home-tab-active');
+            // Render manage tab content directly
+            const tabEl = document.getElementById('tab-content');
+            if (tabEl) {
+                tabEl.innerHTML = `
+                    <div class="manage-add-row">
+                        <button class="btn-add-list" onclick="Screens.showAddList()">
+                            <span>＋</span> Add New Spelling List
+                        </button>
+                    </div>`;
+            }
+            setTimeout(() => _renderBubble(step), 100);
             return;
         }
         if (step.action === 'switchPracticeTab') {
-            const practiceTab = document.querySelectorAll('.home-tab')[0];
-            if (practiceTab) practiceTab.click();
-            setTimeout(() => _renderBubble(step), 300);
+            // Switch tab visually without triggering full showHome() re-render
+            const tabs = document.querySelectorAll('.home-tab');
+            if (tabs[1]) tabs[1].classList.remove('home-tab-active');
+            if (tabs[0]) tabs[0].classList.add('home-tab-active');
+            const tabEl = document.getElementById('tab-content');
+            if (tabEl) {
+                tabEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📋</div>
+                        <h3>No active spelling lists</h3>
+                        <p>Add your first list to start practising!</p>
+                    </div>`;
+            }
+            setTimeout(() => _renderBubble(step), 100);
             return;
         }
         if (step.action === 'showHeroShop') {
