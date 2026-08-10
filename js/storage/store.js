@@ -21,7 +21,8 @@ const Store = (() => {
         premium: false,
         premiumPlan: null,
         premiumExpiry: null,
-        premiumPurchaseDate: null
+        premiumPurchaseDate: null,
+        tutorialDone: false
     };
 
     // ── localStorage helpers ─────────────────────────────────────────────────

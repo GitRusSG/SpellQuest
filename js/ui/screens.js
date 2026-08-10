@@ -253,7 +253,12 @@ const Screens = (() => {
             </div>
         </div>`;
 
-        _renderTabContent();
+        _renderTabContent().then(() => {
+            // Show tutorial for first-time users
+            if (Tutorial.shouldShow()) {
+                setTimeout(() => Tutorial.start(), 500);
+            }
+        });
     }
 
     async function _renderTabContent() {
